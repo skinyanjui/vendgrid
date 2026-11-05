@@ -322,13 +322,19 @@ a.item:hover,button.item:hover{background:var(--gray-100)}
   .hdr.pushed .hdr-title.on{opacity:1}
   .crumbs,.hide-compact{display:none}
   .foot nav{display:none}
-  .tabbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--background);border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom)}
-  .tabbar a{flex:1;min-width:0;min-height:49px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11px;line-height:13px;font-weight:500;color:var(--text-muted)}
-  .tabbar a[aria-current=page]{color:var(--foreground);font-weight:600}
-  .tabbar a[aria-current=page] .ticon::before{content:"";position:absolute;left:50%;top:-6px;width:24px;height:3px;margin-left:-12px;border-radius:2px;background:var(--foreground)}
-  .ticon{position:relative;display:inline-flex}
-  .tbadge{position:absolute;left:14px;top:-6px;min-width:18px;height:18px;padding:0 5px;border-radius:9999px;background:var(--red);color:#fff;font-size:11px;line-height:18px;font-weight:600;text-align:center}
-  .main{padding-bottom:calc(72px + env(safe-area-inset-bottom))}
+  .tabbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:30;gap:0;padding:6px 4px calc(6px + env(safe-area-inset-bottom));background:color-mix(in srgb,var(--background) 88%,transparent);-webkit-backdrop-filter:saturate(1.6) blur(18px);backdrop-filter:saturate(1.6) blur(18px);border-top:1px solid color-mix(in srgb,var(--border) 70%,transparent);transition:transform var(--slow) var(--ease)}
+  .tabbar.hide{transform:translateY(100%)}
+  .tabbar a{position:relative;flex:1;min-width:0;min-height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--text-muted);-webkit-tap-highlight-color:transparent}
+  .tlabel{font-size:12px;line-height:16px;font-weight:500;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ticon{position:relative;display:inline-flex;align-items:center;justify-content:center;width:64px;height:32px;border-radius:16px;transition:background var(--base) var(--ease),transform var(--fast) var(--ease)}
+  .tabbar a:active .ticon{transform:scale(.92)}
+  .tabbar a[aria-current=page] .ticon{background:color-mix(in srgb,var(--blue) 16%,transparent)}
+  .tabbar a[aria-current=page] svg{stroke-width:2.4}
+  .tabbar a[aria-current=page] .i-heart{fill:currentColor}
+  .tabbar a[aria-current=page] .tlabel{font-weight:600}
+  .tbadge{position:absolute;left:calc(50% + 4px);top:-3px;min-width:16px;height:16px;padding:0 4px;border-radius:9999px;background:var(--blue);color:var(--on-blue);font-size:11px;line-height:16px;font-weight:600;text-align:center;box-shadow:0 0 0 2px var(--background)}
+  .tdot{position:absolute;left:calc(50% + 6px);top:2px;width:10px;height:10px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 2px var(--background)}
+  .main{padding-bottom:calc(88px + env(safe-area-inset-bottom))}
 }
 
 /* iPad-style sidebar: collapses to an icon rail at tablet widths; Post becomes icon-only so the search stays centred */
@@ -701,4 +707,36 @@ a.u{text-decoration:underline;text-underline-offset:2px}
 .sellercard .muted{font-size:12px;line-height:16px}
 .item .t>a{display:inline-flex;align-items:center;min-height:32px}
 @media(pointer:coarse){.item .t>a{min-height:44px}}
+/* ── Phone browse screen: one tidy toolbar row; sort collapses to an icon; city chips and the Save search button move out of the way ── */
+.sorticon,.savectx{display:none}
+.bar .sortwrap{position:relative}
+@media(max-width:767px){
+  .sorticon{display:grid;position:absolute;inset:0;place-items:center;pointer-events:none;color:var(--foreground)}
+  .bar>label.row2.sortwrap{flex:none;margin-left:auto}
+  .bar>label.row2.sortwrap .select{appearance:none;-webkit-appearance:none;width:44px;min-width:44px;padding:0;color:transparent;background:var(--background)}
+  .bar .sortwrap .select option{color:var(--foreground)}
+  .bar .savebtn{display:none}
+  .savectx{display:inline-flex;margin-right:-12px}
+  .cityrow{display:none}
+  .toprow{gap:8px}
+}
+@media(max-width:350px){.bar{flex-wrap:wrap}}
+/* Results map pins: blue ring = a city, dark fill = a cluster, solid blue = the city you picked */
+.cpin{display:flex;align-items:center;justify-content:center;border-radius:50%;background:#fff;border:2px solid var(--blue);color:#0b3d91;font-weight:700;font-size:13px;box-shadow:0 1px 6px rgba(0,0,0,.3);cursor:pointer;transition:transform var(--fast) var(--ease)}
+.cpin:hover{transform:scale(1.08)}
+.cpin.cl{background:#111;border-color:#fff;color:#fff;box-shadow:0 0 0 3px rgba(0,0,0,.28),0 1px 6px rgba(0,0,0,.4)}
+.cpin.on{background:var(--blue);border-color:#fff;color:var(--on-blue);box-shadow:0 0 0 3px color-mix(in srgb,var(--blue) 40%,transparent),0 1px 6px rgba(0,0,0,.4)}
+.leaflet-marker-icon:focus-visible .cpin{outline:3px solid var(--blue);outline-offset:2px}
+.mapcount{justify-content:space-between;min-height:44px}
+.mapcount b{color:var(--foreground)}
+.rmap-frame{position:relative}
+.pincard{position:absolute;z-index:1000;display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-xl);background:var(--background);box-shadow:var(--shadow-lg)}
+.pincard.sheet{left:8px;right:8px;bottom:8px;top:auto;width:auto}
+.pincard-h{display:flex;align-items:center;gap:8px;min-height:32px}
+.pincard-h .iconbtn{margin-left:auto;margin-right:-6px}
+.pinstrip{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:4px;overscroll-behavior-x:contain}
+.pinstrip .card{flex:0 0 220px;scroll-snap-align:start}
+.pincard.sheet .pinstrip .card{flex-basis:min(220px,64vw)}
+.mapcount{display:none}
+
 `;

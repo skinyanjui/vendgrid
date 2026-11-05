@@ -9,10 +9,10 @@ import { CSS } from './styles.js';
 import * as api from './backend.js';
 import L from 'leaflet';
 import LEAFLET_CSS from 'leaflet/dist/leaflet.css';
-import { Search, MapPin, Heart, Menu, X, Plus, Check, ArrowLeft, Share2, ChevronRight, ChevronLeft, Flag, SlidersHorizontal, Send, User, Package, Route as RouteIcon, Refrigerator, Wrench, ImagePlus, Trash2, Eye, Info, Building2, Sun, Moon, Monitor, Lock, EyeOff, BarChart3, Circle, Cog, BookOpen, AlertTriangle, Megaphone, Map as MapIcon, LayoutGrid, Paperclip, FileText, Clock, ExternalLink, Bell } from 'lucide-react';
+import { Search, MapPin, Heart, Menu, X, Plus, Check, ArrowLeft, Share2, ChevronRight, ChevronLeft, Flag, SlidersHorizontal, Send, User, Package, Route as RouteIcon, Refrigerator, Wrench, ImagePlus, Trash2, Eye, Info, Building2, Sun, Moon, Monitor, Lock, EyeOff, BarChart3, Circle, Cog, BookOpen, AlertTriangle, Megaphone, Map as MapIcon, LayoutGrid, Paperclip, FileText, Clock, ExternalLink, Bell, ArrowUpDown } from 'lucide-react';
 
 /* ───────────── icons (Lucide) ───────────── */
-const LI = { search: Search, pin: MapPin, heart: Heart, menu: Menu, x: X, plus: Plus, check: Check, back: ArrowLeft, share: Share2, chev: ChevronRight, left: ChevronLeft, flag: Flag, sliders: SlidersHorizontal, send: Send, user: User, box: Package, route: RouteIcon, machine: Refrigerator, wrench: Wrench, image: ImagePlus, trash: Trash2, eye: Eye, info: Info, building: Building2, sun: Sun, moon: Moon, auto: Monitor, cog: Cog, book: BookOpen, alert: AlertTriangle, megaphone: Megaphone, map: MapIcon, grid: LayoutGrid, clip: Paperclip, lock: Lock, eyeoff: EyeOff, chart: BarChart3, circle: Circle, file: FileText, clock: Clock, ext: ExternalLink, bell: Bell };
+const LI = { sort: ArrowUpDown, search: Search, pin: MapPin, heart: Heart, menu: Menu, x: X, plus: Plus, check: Check, back: ArrowLeft, share: Share2, chev: ChevronRight, left: ChevronLeft, flag: Flag, sliders: SlidersHorizontal, send: Send, user: User, box: Package, route: RouteIcon, machine: Refrigerator, wrench: Wrench, image: ImagePlus, trash: Trash2, eye: Eye, info: Info, building: Building2, sun: Sun, moon: Moon, auto: Monitor, cog: Cog, book: BookOpen, alert: AlertTriangle, megaphone: Megaphone, map: MapIcon, grid: LayoutGrid, clip: Paperclip, lock: Lock, eyeoff: EyeOff, chart: BarChart3, circle: Circle, file: FileText, clock: Clock, ext: ExternalLink, bell: Bell };
 const CAT_ICON = { wanted: 'megaphone', machines: 'machine', parts: 'cog', locations: 'building', routes: 'route', services: 'wrench' };
 const Icon = ({ n, size = 20, stroke = 2 }) => { const C = LI[n]; return C ? <C className={'icon i-' + n} size={size} strokeWidth={stroke} aria-hidden="true" style={{ width: size, height: size }} /> : null; };
 
@@ -222,17 +222,99 @@ function OsmMap({ points, circles = [], selected, onPick, height = 340, zoom, la
   return <div className="osm" style={{ height }}><div ref={el} className="osm-map" role="region" aria-label={label} /></div>;
 }
 
-/* Results map: city-level bubbles from real coordinates (no tiles, no addresses). Tap a city to see its listings. */
+/* Results map: a real OpenStreetMap with one pin per city (listings never show exact addresses). Nearby pins merge into
+   numbered clusters that open up as you zoom; the cards underneath always show what's in view, or the pin you picked. */
+function ClusterMap({ points, selected, onPick, onHover, onView, apiRef, height = 420, label, fallback }) {
+  const el = useRef(null), map = useRef(null), layer = useRef(null), fitKey = useRef(''), lastSel = useRef(null), draw = useRef(() => {});
+  const [state, setState] = useState('loading');
+  const live = useRef({ points, selected, onPick, onHover, onView }); live.current = { points, selected, onPick, onHover, onView };
+  useEffect(() => {
+    if (!leafletCssIn && typeof document !== 'undefined') { const st = document.createElement('style'); st.textContent = LEAFLET_CSS; document.head.appendChild(st); leafletCssIn = true; }
+    let loaded = false, t, timer;
+    try {
+      const m = L.map(el.current, { scrollWheelZoom: false, attributionControl: true, zoomControl: true });
+      m.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>');
+      L.tileLayer(OSM_TILES, { maxZoom: 18, attribution: OSM_ATTR, crossOrigin: true }).on('tileload', () => { if (!loaded) { loaded = true; setState('ok'); } }).addTo(m);
+      layer.current = L.layerGroup().addTo(m); map.current = m;
+      if (apiRef) apiRef.current = { point: (k) => { const p = live.current.points.find((x) => x.key === k); if (!p || !map.current) return null; const c = map.current.latLngToContainerPoint([p.lat, p.lng]); const sz = map.current.getSize(); return { x: c.x, y: c.y, w: sz.x, h: sz.y }; } };
+      const again = () => { clearTimeout(timer); timer = setTimeout(() => draw.current(), 60); };
+      m.on('zoomend moveend', again);
+      m.on('movestart', () => live.current.onHover(null, true));
+      t = setTimeout(() => { if (!loaded) setState('failed'); }, 5000);
+    } catch (e) { setState('failed'); }
+    return () => { clearTimeout(t); clearTimeout(timer); if (apiRef) apiRef.current = null; try { map.current && map.current.remove(); } catch (e) { /* already gone */ } map.current = null; };
+  }, []);
+  draw.current = () => {
+    const m = map.current, g = layer.current; if (!m || !g) return;
+    const { points: pts, selected: sel, onPick: pick, onHover: hover, onView: view } = live.current;
+    g.clearLayers();
+    // Greedy clustering by on-screen distance: biggest pins first, anything within 46px joins it.
+    const px = pts.map((p) => ({ p, pt: m.latLngToContainerPoint([p.lat, p.lng]) })).sort((x, y) => y.p.count - x.p.count);
+    const used = new Set(), groups = [];
+    px.forEach((a) => { if (used.has(a.p.key)) return; const mem = [a]; used.add(a.p.key); px.forEach((b) => { if (!used.has(b.p.key) && Math.hypot(a.pt.x - b.pt.x, a.pt.y - b.pt.y) < 46) { mem.push(b); used.add(b.p.key); } }); groups.push(mem); });
+    let selShown = false;
+    groups.forEach((mem) => {
+      const count = mem.reduce((n, x) => n + x.p.count, 0);
+      const lat = mem.reduce((n, x) => n + x.p.lat * x.p.count, 0) / count, lng = mem.reduce((n, x) => n + x.p.lng * x.p.count, 0) / count;
+      const single = mem.length === 1, on = single && mem[0].p.key === sel; if (on) selShown = true;
+      const size = Math.round(30 + Math.sqrt(count) * 5);
+      const name = single ? `${mem[0].p.label}, ${count} ${count === 1 ? 'listing' : 'listings'}` : `${count} listings in ${mem.length} cities. Zoom in.`;
+      const icon = L.divIcon({ className: 'osm-ico', html: `<span class="cpin${single ? '' : ' cl'}${on ? ' on' : ''}" style="width:${size}px;height:${size}px">${count}</span>`, iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
+      const mk = L.marker([lat, lng], { icon, keyboard: true, title: name, alt: name, riseOnHover: true }).addTo(g);
+      if (single) {
+        mk.on('mouseover focus', () => hover(mem[0].p.key));
+        mk.on('mouseout', () => hover(null));
+        mk.on('click keypress', (e) => { if (e.type === 'keypress' && !['Enter', ' '].includes(e.originalEvent && e.originalEvent.key)) return; pick(mem[0].p.key); });
+      } else {
+        mk.bindTooltip(name, { direction: 'top', offset: [0, -size / 2], className: 'osm-tip' });
+        mk.on('click keypress', (e) => { if (e.type === 'keypress' && !['Enter', ' '].includes(e.originalEvent && e.originalEvent.key)) return; hover(null, true); m.fitBounds(L.latLngBounds(mem.map((x) => [x.p.lat, x.p.lng])), { padding: [60, 60], maxZoom: 12 }); });
+      }
+    });
+    const b = m.getBounds();
+    view(pts.filter((p) => b.contains([p.lat, p.lng])).map((p) => p.key));
+    // A pick from the city chips: zoom in until that city stands alone, then keep it in view.
+    if (sel && sel !== lastSel.current) { lastSel.current = sel; const p = pts.find((x) => x.key === sel); if (p && !selShown) m.setView([p.lat, p.lng], Math.min(Math.max(m.getZoom() + 3, 8), 11)); else if (p && !b.contains([p.lat, p.lng])) m.panTo([p.lat, p.lng]); }
+    if (!sel) lastSel.current = null;
+  };
+  useEffect(() => {
+    const m = map.current; if (!m) return;
+    const key = points.map((p) => p.key + p.lat + p.lng).join('|');
+    if (key !== fitKey.current) { fitKey.current = key; const all = points.map((p) => [p.lat, p.lng]); if (all.length === 1) m.setView(all[0], 9); else if (all.length) m.fitBounds(all, { padding: [40, 40], maxZoom: 10 }); }
+    draw.current();
+  }, [points, selected]);
+  if (state === 'failed' && fallback) return fallback;
+  return <div className="osm" style={{ height }}><div ref={el} className="osm-map" role="region" aria-label={label} /></div>;
+}
+
+/* The card preview that opens over a pin: hover it on a desktop, tap it on a phone. */
+function PinCard({ group, anchor, sheet, pinned, onClose, onEnter, onLeave, showType }) {
+  const W = 548;
+  let style;
+  if (sheet || !anchor) style = {};
+  else { const w = Math.min(W, anchor.w - 16); const left = Math.max(8, Math.min(anchor.w - w - 8, anchor.x - w / 2)); const below = anchor.y < 330; style = { width: w, left, [below ? 'top' : 'bottom']: below ? anchor.y + 26 : anchor.h - anchor.y + 26 }; }
+  return (
+    <div className={'pincard' + (sheet || !anchor ? ' sheet' : '')} style={style} role="dialog" aria-label={`${group.city} listings`} onMouseEnter={onEnter} onMouseLeave={onLeave}>
+      <div className="pincard-h"><b>{group.city}, {group.key.split(', ')[1]}</b><span className="muted">{group.items.length} {group.items.length === 1 ? 'listing' : 'listings'}</span><button type="button" className="iconbtn" aria-label="Close preview" onClick={onClose}><Icon n="x" size={18} /></button></div>
+      <div className="pinstrip">{group.items.map((l) => <ListingCard key={l.id} l={l} showType={showType} />)}</div>
+    </div>
+  );
+}
+
 function ResultsMap({ items, showType }) {
   const groups = useMemo(() => {
     const m = {};
     items.forEach((l) => { const k = l.geo.city + ', ' + l.geo.st; (m[k] ??= { key: k, city: l.geo.city, lat: l.geo.lat, lng: l.geo.lng, items: [] }).items.push(l); });
     return Object.values(m).sort((a, b) => b.items.length - a.items.length);
   }, [items]);
-  const [sel, setSel] = useState(null);
+  const [pin, setPin] = useState(null);     // city the person tapped or clicked: stays open
+  const [hov, setHov] = useState(null);     // city under the pointer: open while hovering
+  const [, setView] = useState(null);
+  const api = useRef(null), leave = useRef(null);
   const pts = useMemo(() => groups.map((g) => ({ key: g.key, lat: g.lat, lng: g.lng, count: g.items.length, label: g.city })), [groups]);
-  const cur = groups.find((g) => g.key === sel) || groups[0];
+  useEffect(() => { if (pin && !groups.some((g) => g.key === pin)) setPin(null); }, [groups]);
+  useEffect(() => { const k = (e) => { if (e.key === 'Escape') { setPin(null); setHov(null); } }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k); }, []);
   if (!groups.length) return null;
+  const hover = (k, hard) => { clearTimeout(leave.current); if (k) setHov(k); else if (hard) setHov(null); else leave.current = setTimeout(() => setHov(null), 220); };
   const narrow = typeof window !== 'undefined' && window.innerWidth < 600;
   const W = narrow ? 360 : 640, H = narrow ? 300 : 340, pad = narrow ? 40 : 48;
   const lat0 = Math.min(...groups.map((g) => g.lat)), lat1 = Math.max(...groups.map((g) => g.lat));
@@ -242,28 +324,31 @@ function ResultsMap({ items, showType }) {
   const sc = Math.min((W - pad * 2) / spanX, (H - pad * 2) / spanY);
   const cx = (lng0 + lng1) / 2, cy = (lat0 + lat1) / 2;
   const pos = (g) => ({ x: W / 2 + (g.lng - cx) * kx * sc, y: H / 2 - (g.lat - cy) * sc });
+  const openKey = pin || hov;
+  const open = groups.find((g) => g.key === openKey);
+  const anchor = open && api.current ? api.current.point(open.key) : null;
+  const choose = (k) => { setPin((c) => (c === k ? null : k)); setHov(null); };
   return (
     <div className="rmap">
       <div className="rmap-frame">
-        <OsmMap label={`Map of ${items.length} listings across ${groups.length} cities`} height={narrow ? 300 : 380} selected={cur.key} onPick={setSel}
-          points={pts}
+        <ClusterMap label={`Map of ${items.length} listings across ${groups.length} cities`} height={narrow ? 'min(66vh, 520px)' : 'min(72vh, 680px)'} selected={pin} onPick={choose} onHover={hover} onView={setView} apiRef={api} points={pts}
           fallback={<svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Map of ${items.length} listings across ${groups.length} cities`}>
           <rect width={W} height={H} className="am-bg" />
           {Array.from({ length: 9 }, (_, i) => <line key={'v' + i} x1={(W / 8) * i} y1="0" x2={(W / 8) * i} y2={H} className="rm-grid" />)}
           {Array.from({ length: 5 }, (_, i) => <line key={'h' + i} x1="0" y1={(H / 4) * i} x2={W} y2={(H / 4) * i} className="rm-grid" />)}
-          {groups.map((g, gi) => { const p = pos(g), r = (narrow ? 10 : 12) + Math.sqrt(g.items.length) * (narrow ? 3 : 5), on = g === cur;
+          {groups.map((g, gi) => { const p = pos(g), r = (narrow ? 10 : 12) + Math.sqrt(g.items.length) * (narrow ? 3 : 5), on = g.key === pin;
             const crowded = groups.slice(0, gi).some((o) => { const q = pos(o); return Math.hypot(q.x - p.x, q.y - p.y) < 44; });
             const ly = crowded ? p.y - r - 6 : p.y + r + 14; return (
-            <g key={g.key} className={'rm-pt' + (on ? ' on' : '')} onClick={() => setSel(g.key)} aria-hidden="true">
+            <g key={g.key} className={'rm-pt' + (on ? ' on' : '')} onClick={() => choose(g.key)} aria-hidden="true">
               <circle cx={p.x} cy={p.y} r={r} />
               <text x={p.x} y={p.y + 4} textAnchor="middle" className="rm-n">{g.items.length}</text>
               <text x={p.x} y={ly} textAnchor="middle" className="rm-l">{g.city}</text>
             </g>); })}
         </svg>} />
+        {open && <PinCard group={open} anchor={anchor} sheet={narrow} pinned={!!pin} showType={showType} onClose={() => { setPin(null); setHov(null); }} onEnter={() => clearTimeout(leave.current)} onLeave={() => hover(null)} />}
       </div>
-      <div className="mapcities"><Seg label="City" size="wrap" options={groups.map((g) => [g.key, `${g.city} · ${g.items.length}`])} value={cur.key} onChange={setSel} /></div>
-      <p className="muted iconline" style={{ fontSize: 12 }}><Icon n="pin" size={13} />Pins sit at the city centre. Exact addresses are never shown.</p>
-      <div className="grid">{cur.items.map((l) => <ListingCard key={l.id} l={l} showType={showType} />)}</div>
+      <div className="mapcities"><Seg label="City" size="wrap" options={groups.map((g) => [g.key, `${g.city} · ${g.items.length}`])} value={pin || ''} onChange={(k) => choose(k)} /></div>
+      <p className="muted iconline" style={{ fontSize: 12 }}><Icon n="pin" size={13} />{items.length} listings · {narrow ? 'Tap' : 'Hover or click'} a pin to preview its listings. Pins sit at the city centre; exact addresses are never shown.</p>
     </div>
   );
 }
@@ -734,6 +819,14 @@ function Sidebar({ route }) {
 }
 function TabBar({ route }) {
   const { user, unread, prefLoc, noteCount } = useApp();
+  const [hide, setHide] = useState(false);
+  // Hides while you scroll down to read, returns the moment you scroll up (or reach the top).
+  useEffect(() => {
+    let last = window.scrollY, tick = false;
+    const f = () => { if (tick) return; tick = true; requestAnimationFrame(() => { const y = window.scrollY, d = y - last; if (y < 64 || d < -6) setHide(false); else if (d > 10) setHide(true); if (Math.abs(d) > 6) last = y; tick = false; }); };
+    window.addEventListener('scroll', f, { passive: true }); return () => window.removeEventListener('scroll', f);
+  }, []);
+  useEffect(() => { setHide(false); }, [route.name]);
   if (!TOP_LEVEL.includes(route.name)) return null;
   const gate = (h) => (user ? h : '#/login?next=' + enc(h));
   const tabs = [
@@ -744,11 +837,11 @@ function TabBar({ route }) {
     ['account', 'Account', 'user', '#/account'],
   ];
   return (
-    <nav className="tabbar" aria-label="Primary">
+    <nav className={'tabbar' + (hide ? ' hide' : '')} aria-label="Primary" onFocus={() => setHide(false)}>
       {tabs.map(([n, label, ic, href]) => (
         <a key={n} href={href} aria-current={route.name === n ? 'page' : undefined}>
-          <span className="ticon"><Icon n={ic} size={24} />{n === 'messages' && unread > 0 && <span className="tbadge" aria-label={`${unread} unread`}>{unread}</span>}{n === 'account' && noteCount > 0 && <span className="tbadge" aria-label={`${noteCount} new`}>{noteCount}</span>}</span>
-          <span>{label}</span>
+          <span className="ticon"><Icon n={ic} size={24} />{n === 'messages' && unread > 0 && <span className="tbadge" role="img" aria-label={`${unread} unread`}>{unread > 9 ? '9+' : unread}</span>}{n === 'account' && noteCount > 0 && <span className="tdot" role="img" aria-label={`${noteCount} new`} />}</span>
+          <span className="tlabel">{label}</span>
         </a>
       ))}
     </nav>
@@ -1031,7 +1124,7 @@ function Browse({ route, go }) {
           <button type="button" role="radio" aria-checked={query.view !== 'map'} aria-label="Grid view" onClick={() => set({ ...query, view: '' })}><Icon n="grid" size={16} /></button>
           <button type="button" role="radio" aria-checked={query.view === 'map'} aria-label="Map view" onClick={() => set({ ...query, view: 'map' })}><Icon n="map" size={16} /></button>
         </div>
-        <label className="row2"><span className="sr">Sort by</span>
+        <label className="row2 sortwrap"><span className="sr">Sort by</span><span className="sorticon" aria-hidden="true"><Icon n="sort" size={18} /></span>
           <select className="select" aria-label="Sort by" value={sort} onChange={(e) => set({ ...query, sort: e.target.value, n: 1 }, false)}>
             {sorts.map((s) => <option key={s} value={s}>{SORTS[s]}</option>)}
           </select>
@@ -1048,6 +1141,7 @@ function Browse({ route, go }) {
       {state.status !== 'loading' && query.view !== 'map' && <CityRow items={mapItems} query={query} set={set} />}
       <div className="ctx" role="status" aria-live="polite">
         <span><b>{label}</b>{query.loc ? ` · ${query.loc}` : <span className="nophone"> · Nationwide</span>}{state.status !== 'loading' && state.status !== 'error' ? ` · ${state.total} ${state.total === 1 ? 'result' : 'results'}` : ''}</span>
+        <button className="btn ghost sm savectx" disabled={savedAlready} onClick={() => (user ? saveSearch(query) : requireAuth({ type: 'saveSearch', query }, go))}>{savedAlready ? 'Search saved' : 'Save search'}</button>
       </div>
 
       {state.status === 'error' ? (
