@@ -77,12 +77,15 @@ export async function loadMine(uid) {
 export async function loadConversations(uid, orgs, listings) {
   const c = await client.from('vg_conversations').select('*, vg_messages(*)').order('created_at', { ascending: false });
   fail(c.error);
-  return c.data.map((x) => {
+  const list = c.data.map((x) => {
     const l = listings.find((y) => y.id === x.listing_id);
     const me = x.buyer === uid ? 'buyer' : 'owner';
     const msgs = (x.vg_messages || []).sort((a, b) => a.id - b.id).map((m) => ({ id: m.id, from: m.sender === uid ? 'me' : 'them', at: ts(m.created_at), text: m.body, ...(m.images && m.images.length ? { imgs: m.images } : {}) }));
     return { id: x.id, listingId: x.listing_id, me, other: me === 'buyer' ? (l && orgs[l.org] ? orgs[l.org].name : 'Seller') : 'Buyer', status: x.status, blocked: !!x.blocked_by, unread: 0, msgs };
   });
+  const signed = await signMessagePhotos(list).catch(() => ({}));
+  list.forEach((cv) => cv.msgs.forEach((m) => { if (m.imgs) m.imgs = m.imgs.map((u) => signed[u] || u).filter((u) => !u.startsWith('vg-msg:')); }));
+  return list;
 }
 
 /** Upload data-URL photos to the user's folder and return public URLs. Existing URLs pass through. */
@@ -146,11 +149,37 @@ export async function openConversation(listingId) {
   }
   fail(ins.error);
 }
+/** Message photos: private bucket, stored as `vg-msg:<path>` and shown through short-lived signed URLs. */
+async function uploadMessagePhotos(convId, imgs) {
+  const out = [];
+  for (let i = 0; i < imgs.length; i++) {
+    const blob = await (await fetch(imgs[i])).blob();
+    const path = `${convId}/${Date.now()}-${i}.jpg`;
+    const up = await client.storage.from('vg-msg').upload(path, blob, { contentType: blob.type || 'image/jpeg' });
+    fail(up.error);
+    out.push('vg-msg:' + path);
+  }
+  return out;
+}
+export async function signMessagePhotos(convs) {
+  const paths = [...new Set(convs.flatMap((c) => c.msgs.flatMap((m) => (m.imgs || []).filter((u) => u.startsWith('vg-msg:')).map((u) => u.slice(7)))))];
+  if (!paths.length) return {};
+  const r = await client.storage.from('vg-msg').createSignedUrls(paths, 3600);
+  if (r.error) return {};
+  return Object.fromEntries(r.data.filter((x) => x.signedUrl).map((x) => ['vg-msg:' + x.path, x.signedUrl]));
+}
 export async function postMessage(uid, convId, body, imgs) {
-  const images = imgs && imgs.length ? await uploadPhotos(uid, imgs) : [];
+  const images = imgs && imgs.length ? await uploadMessagePhotos(convId, imgs) : [];
   const r = await client.from('vg_messages').insert({ conversation_id: convId, body: body || '', images }).select().single();
   fail(r.error);
   return images;
 }
 export async function setConversation(id, patch) { const r = await client.from('vg_conversations').update(patch).eq('id', id); fail(r.error); }
 export async function addReport(listingId, reason) { const r = await client.from('vg_reports').insert({ listing_id: listingId, reason }); fail(r.error); }
+
+export async function loadReports() {
+  const r = await client.from('vg_reports').select('*').order('created_at', { ascending: false }).limit(200);
+  fail(r.error);
+  return r.data.map((x) => ({ id: x.id, listingId: x.listing_id, reason: x.reason, by: 'member ' + String(x.reporter).slice(0, 8), at: ts(x.created_at), status: x.status }));
+}
+export async function setReport(id, status) { const r = await client.from('vg_reports').update({ status }).eq('id', id); fail(r.error); }

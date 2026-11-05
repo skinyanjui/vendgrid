@@ -29,10 +29,10 @@ Serve `dist/` with any static host. On Vercel, `vercel.json` sets the build comm
 
 The app talks to Supabase (`src/backend.js`). On start it checks whether the project answers:
 
-- **Live mode** (normal on the deployed site): listings and businesses come from the `vg_` tables; sign-in is by emailed magic link; saved listings, saved searches, posting (with photo upload to the `vg-photos` bucket), conversations and messages (with photos), listing status changes and reports are stored in the database.
+- **Live mode** (normal on the deployed site): listings and businesses come from the `vg_` tables; sign-in is by emailed magic link; saved listings, saved searches, posting (with photo upload to the `vg-photos` bucket), conversations and messages (photos go to a private bucket and are shown via signed URLs), listing status changes and reports are stored in the database.
 - **Demo mode** (when Supabase can't be reached, e.g. in tests or sandboxed previews): everything runs on the sample data in `src/data.js` and is kept in the visitor's browser.
 
-Still demo-only in both modes: billing/promotions (no Stripe yet), business verification review, and the admin area's data.
+Admin reports are live for admin accounts. Still demo-only: billing/promotions (no Stripe yet) and business verification review.
 
 `src/backend.js` holds the project URL and **publishable** key, which are safe in a browser; row-level security protects the data. Never put a `service_role` key in this repo.
 

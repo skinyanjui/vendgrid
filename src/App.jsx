@@ -1668,6 +1668,8 @@ export default function App() {
   const [liveConvs, setLiveConvs] = useState([]);
   const [profile, setProfile] = useState(null);
   const live = mode === 'live';
+  const [seenAt, setSeenAt] = usePersist('seenAt', {});
+  const [liveReports, setLiveReports] = useState([]);
   const seenImpr = useRef(new Set());
   const pending = useRef(null);
   const stack = useRef([fromAddr(typeof location !== 'undefined' ? location.hash : '')]);
@@ -1698,7 +1700,8 @@ export default function App() {
 
   const orgs = useMemo(() => withFallbackOrg(live ? liveOrgs : { ...ORGS, dm: { ...ORGS.dm, verified: verif.status === 'verified' } }), [live, liveOrgs, verif.status]);
   const srcListings = live ? liveListings : listings;
-  const curUser = live ? liveUser : user, curFavs = live ? liveFavs : favs, curSearches = live ? liveSearches : searches, curConvs = live ? liveConvs : convs;
+  const liveConvsSeen = useMemo(() => liveConvs.map((c) => ({ ...c, unread: c.msgs.filter((m) => m.from === 'them' && m.at > (seenAt[c.id] || 0)).length })), [liveConvs, seenAt]);
+  const curUser = live ? liveUser : user, curFavs = live ? liveFavs : favs, curSearches = live ? liveSearches : searches, curConvs = live ? liveConvsSeen : convs;
   const allListings = useMemo(() => srcListings.map((l) => (l.status === 'published' && promos.some((p) => p.listingId === l.id && p.status === 'active') ? { ...l, sponsored: true } : l)), [srcListings, promos]);
   const promosView = useMemo(() => promos.map((p) => { const l = listings.find((x) => x.id === p.listingId); return p.status === 'active' && (!l || l.status !== 'published') ? { ...p, status: 'suspended' } : p; }), [promos, listings]);
   const isPro = plan.status === 'active';
@@ -1719,7 +1722,7 @@ export default function App() {
     setLiveUser(u);
     const c = await refreshCatalog(u && u.id).catch(() => null);
     if (!u) { setLiveFavs(new Set()); setLiveSearches([]); setLiveConvs([]); setProfile(null); return; }
-    try { const m = await api.loadMine(u.id); setProfile(m.profile); setLiveFavs(m.favs); setLiveSearches(m.searches); } catch (e) { /* signed in, but extras failed */ }
+    try { const m = await api.loadMine(u.id); setProfile(m.profile); setLiveFavs(m.favs); setLiveSearches(m.searches); if (m.profile && m.profile.role === 'admin') api.loadReports().then(setLiveReports).catch(() => {}); } catch (e) { /* signed in, but extras failed */ }
     await refreshConvs(u.id, c);
     const p = pending.current; pending.current = null;
     if (p && p.type === 'save') { setLiveFavs((f) => new Set(f).add(p.id)); api.addFav(u.id, p.id).catch(liveErr); }
@@ -1810,7 +1813,7 @@ export default function App() {
     return { convId: id };
   };
   const sendMsg = (id, text, imgs) => live ? (setLiveConvs((c) => c.map((x) => (x.id === id ? { ...x, msgs: [...x.msgs, { from: 'me', at: Date.now(), text, ...(imgs && imgs.length ? { imgs } : {}) }] } : x))), api.postMessage(liveUser.id, id, text, imgs).then(() => refreshConvs(liveUser.id)).catch(liveErr)) : setConvs((c) => c.map((x) => (x.id === id && !x.blocked ? { ...x, msgs: [...x.msgs, { from: 'me', at: Date.now(), text, ...(imgs && imgs.length ? { imgs } : {}) }] } : x)));
-  const markRead = (id) => (live ? setLiveConvs : setConvs)((c) => c.map((x) => (x.id === id ? { ...x, unread: 0 } : x)));
+  const markRead = (id) => live ? setSeenAt((s) => ({ ...s, [id]: Date.now() })) : setConvs((c) => c.map((x) => (x.id === id ? { ...x, unread: 0 } : x)));
   const setConvStatus = (id, s) => { if (live) api.setConversation(id, { status: s }).catch(liveErr); (live ? setLiveConvs : setConvs)((c) => c.map((x) => (x.id === id ? { ...x, status: s } : x))); };
   const blockConv = (id) => { if (live) api.setConversation(id, { blocked_by: liveUser.id, status: 'closed' }).catch(liveErr); (live ? setLiveConvs : setConvs)((c) => c.map((x) => (x.id === id ? { ...x, blocked: true, status: 'closed' } : x))); notify('Person blocked'); };
   const report = (id, reason) => { if (live) { if (!liveUser) { notify('Sign in to report a listing.'); return; } api.addReport(id, reason).then(() => notify('Report sent. Thanks, we’ll review it.')).catch(liveErr); return; } setReports((r) => [{ id: 'r-' + Date.now(), listingId: id, reason, by: user ? user.email : 'guest', at: Date.now(), status: 'open' }, ...r]); notify('Report sent. Thanks, we’ll review it.'); };
@@ -1878,6 +1881,12 @@ export default function App() {
   };
   const decideReport = (id, action) => {
     if (!isAdmin) return;
+    if (live) {
+      const r = liveReports.find((x) => x.id === id);
+      setLiveReports((rs) => rs.map((x) => (x.id === id ? { ...x, status: action === 'withdraw' ? 'actioned' : 'dismissed' } : x)));
+      api.setReport(id, action === 'withdraw' ? 'actioned' : 'dismissed').then(() => (action === 'withdraw' && r ? api.setListingStatus(r.listingId, 'withdrawn').then(() => setLiveListings((ls) => ls.map((l) => (l.id === r.listingId ? { ...l, status: 'withdrawn' } : l)))) : null)).catch(liveErr);
+      return;
+    }
     const r = reports.find((x) => x.id === id);
     setReports((rs) => rs.map((x) => (x.id === id ? { ...x, status: action === 'withdraw' ? 'actioned' : 'dismissed' } : x)));
     if (action === 'withdraw' && r) setListings((ls) => ls.map((l) => (l.id === r.listingId && TRANSITIONS[l.status].includes('withdrawn') ? { ...l, status: 'withdrawn', history: [...l.history, { at: Date.now(), to: 'withdrawn' }] } : l)));
@@ -1890,7 +1899,7 @@ export default function App() {
     const h = (e) => { const el = e.target.closest && e.target.closest('a[href^="#/"]'); if (!el || e.defaultPrevented || e.metaKey || e.ctrlKey || e.button) return; e.preventDefault(); go(el.getAttribute('href')); };
     document.addEventListener('click', h); return () => document.removeEventListener('click', h);
   }, [go]);
-  const ctx = { themeSel, seeSearch, listings: allListings, priv, metrics, impr, tickets, track, trackImpr, addTicket, isPro, isAdmin, plan, promos: promosView, verif, reports, events, invoices, audit, views, subscribe, cancelPlan, promote, cancelPromo, confirmPayment, processEvent, submitVerif, decideVerif, decideReport, bumpView, orgs, user: curUser, favs: curFavs, searches: curSearches, convs: curConvs, live, mode, sendMagicLink, drafts, prefLoc, setPrefLoc, theme, setTheme, unread, notify, requireAuth, signIn, signOut, toggleFav, saveSearch, removeSearch, searchFromText, startInquiry, sendMsg, markRead, setConvStatus, blockConv, report, setStatus, publish, setDraft };
+  const ctx = { themeSel, seeSearch, listings: allListings, priv, metrics, impr, tickets, track, trackImpr, addTicket, isPro, isAdmin, plan, promos: promosView, verif, reports: live ? liveReports : reports, events, invoices, audit, views, subscribe, cancelPlan, promote, cancelPromo, confirmPayment, processEvent, submitVerif, decideVerif, decideReport, bumpView, orgs, user: curUser, favs: curFavs, searches: curSearches, convs: curConvs, live, mode, sendMagicLink, drafts, prefLoc, setPrefLoc, theme, setTheme, unread, notify, requireAuth, signIn, signOut, toggleFav, saveSearch, removeSearch, searchFromText, startInquiry, sendMsg, markRead, setConvStatus, blockConv, report, setStatus, publish, setDraft };
 
   let view;
   switch (route.name) {
