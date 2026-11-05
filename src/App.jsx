@@ -8,10 +8,10 @@ import { CSS } from './styles.js';
 import * as api from './backend.js';
 import L from 'leaflet';
 import LEAFLET_CSS from 'leaflet/dist/leaflet.css';
-import { Search, MapPin, Heart, Menu, X, Plus, Check, ArrowLeft, Share2, ChevronRight, ChevronLeft, Flag, SlidersHorizontal, Send, User, Package, Route as RouteIcon, Refrigerator, Wrench, ImagePlus, Trash2, Eye, Info, Building2, Sun, Moon, Monitor, Lock, EyeOff, BarChart3, Circle, Cog, BookOpen, AlertTriangle, Megaphone, Map as MapIcon, LayoutGrid, Paperclip, FileText, Clock, ExternalLink } from 'lucide-react';
+import { Search, MapPin, Heart, Menu, X, Plus, Check, ArrowLeft, Share2, ChevronRight, ChevronLeft, Flag, SlidersHorizontal, Send, User, Package, Route as RouteIcon, Refrigerator, Wrench, ImagePlus, Trash2, Eye, Info, Building2, Sun, Moon, Monitor, Lock, EyeOff, BarChart3, Circle, Cog, BookOpen, AlertTriangle, Megaphone, Map as MapIcon, LayoutGrid, Paperclip, FileText, Clock, ExternalLink, Bell } from 'lucide-react';
 
 /* ───────────── icons (Lucide) ───────────── */
-const LI = { search: Search, pin: MapPin, heart: Heart, menu: Menu, x: X, plus: Plus, check: Check, back: ArrowLeft, share: Share2, chev: ChevronRight, left: ChevronLeft, flag: Flag, sliders: SlidersHorizontal, send: Send, user: User, box: Package, route: RouteIcon, machine: Refrigerator, wrench: Wrench, image: ImagePlus, trash: Trash2, eye: Eye, info: Info, building: Building2, sun: Sun, moon: Moon, auto: Monitor, cog: Cog, book: BookOpen, alert: AlertTriangle, megaphone: Megaphone, map: MapIcon, grid: LayoutGrid, clip: Paperclip, lock: Lock, eyeoff: EyeOff, chart: BarChart3, circle: Circle, file: FileText, clock: Clock, ext: ExternalLink };
+const LI = { search: Search, pin: MapPin, heart: Heart, menu: Menu, x: X, plus: Plus, check: Check, back: ArrowLeft, share: Share2, chev: ChevronRight, left: ChevronLeft, flag: Flag, sliders: SlidersHorizontal, send: Send, user: User, box: Package, route: RouteIcon, machine: Refrigerator, wrench: Wrench, image: ImagePlus, trash: Trash2, eye: Eye, info: Info, building: Building2, sun: Sun, moon: Moon, auto: Monitor, cog: Cog, book: BookOpen, alert: AlertTriangle, megaphone: Megaphone, map: MapIcon, grid: LayoutGrid, clip: Paperclip, lock: Lock, eyeoff: EyeOff, chart: BarChart3, circle: Circle, file: FileText, clock: Clock, ext: ExternalLink, bell: Bell };
 const CAT_ICON = { wanted: 'megaphone', machines: 'machine', parts: 'cog', locations: 'building', routes: 'route', services: 'wrench' };
 const Icon = ({ n, size = 20, stroke = 2 }) => { const C = LI[n]; return C ? <C className={'icon i-' + n} size={size} strokeWidth={stroke} aria-hidden="true" style={{ width: size, height: size }} /> : null; };
 
@@ -63,6 +63,7 @@ export function parseHash(h) {
     case 'admin': return { name: 'admin', tab: sp.get('tab') || 'verification' };
     case 'account': case 'menu': return { name: 'account' };
     case 'guide': return { name: 'guide', topic: sp.get('t') || 'machines' };
+    case 'activity': return { name: 'activity' };
     default: return { name: 'notfound' };
   }
 }
@@ -96,7 +97,7 @@ export function fromAddr(a) {
   if ((m = s.match(/^s-([0-9a-f]+)$/))) return '#/?' + fromHex(m[1]);
   if (s === 'menu') return '#/account';
   if (s === 'my-listings') return '#/my-listings';
-  if (['post', 'saved', 'messages', 'login', 'account', 'billing', 'admin', 'legal', 'guide'].includes(s)) return '#/' + s;
+  if (['post', 'saved', 'messages', 'login', 'account', 'billing', 'admin', 'legal', 'guide', 'activity'].includes(s)) return '#/' + s;
   return '#/';
 }
 
@@ -659,9 +660,9 @@ const NAV = [
   ['', 'Explore', 'search'], ['machines', 'Machines', 'machine'], ['parts', 'Parts', 'cog'], ['locations', 'Locations', 'building'], ['routes', 'Routes', 'route'], ['services', 'Services', 'wrench'], ['wanted', 'Wanted', 'megaphone'],
 ];
 const TOP_LEVEL = ['browse', 'saved', 'messages', 'mine', 'account'];
-const PUSHED_TITLES = { listing: 'Listing', inquire: 'Contact seller', post: 'New listing', business: 'Seller', billing: 'Billing', bizsettings: 'Business settings', admin: 'Admin', legal: 'Help', guide: 'Buyer’s guide', login: 'Sign in', notfound: 'Not found' };
+const PUSHED_TITLES = { activity: 'Activity', listing: 'Listing', inquire: 'Contact seller', post: 'New listing', business: 'Seller', billing: 'Billing', bizsettings: 'Business settings', admin: 'Admin', legal: 'Help', guide: 'Buyer’s guide', login: 'Sign in', notfound: 'Not found' };
 function Header({ route, go }) {
-  const { user, prefLoc, setPrefLoc, theme, setTheme, signOut, unread, isAdmin } = useApp();
+  const { user, prefLoc, setPrefLoc, theme, setTheme, signOut, unread, isAdmin, noteCount } = useApp();
   const [acct, setAcct] = useState(false);
   const query = route.name === 'browse' ? route.query : null;
   const loc = query ? query.loc : prefLoc;
@@ -704,7 +705,7 @@ function Header({ route, go }) {
   );
 }
 function Sidebar({ route }) {
-  const { user, unread, prefLoc } = useApp();
+  const { user, unread, prefLoc, noteCount } = useApp();
   const cat = route.name === 'browse' ? route.query.cat : null;
   const link = (c) => encodeQuery({ ...DEFAULT_QUERY, f: {}, cat: c || 'all', loc: route.name === 'browse' ? route.query.loc : prefLoc });
   const cur = (ok) => (ok ? 'page' : undefined);
@@ -714,12 +715,13 @@ function Sidebar({ route }) {
       <a href={user ? '#/saved' : '#/login?next=' + enc('#/saved')} aria-current={cur(route.name === 'saved')}><Icon n="heart" size={18} /><span className="slabel">Saved</span></a>
       <a href={user ? '#/messages' : '#/login?next=' + enc('#/messages')} aria-current={cur(route.name === 'messages')}><Icon n="send" size={18} /><span className="slabel">Messages</span>{unread > 0 && <span className="count" aria-label={`${unread} unread`}>{unread}</span>}</a>
       <a href={user ? '#/my-listings' : '#/login?next=' + enc('#/my-listings')} aria-current={cur(route.name === 'mine')}><Icon n="box" size={18} /><span className="slabel">My Listings</span></a>
+      {user && <a href="#/activity" aria-current={cur(route.name === 'activity')}><Icon n="bell" size={18} /><span className="slabel">Activity</span>{noteCount > 0 && <span className="count" aria-label={`${noteCount} new`}>{noteCount}</span>}</a>}
       {!user && <a href="#/login"><Icon n="user" size={18} /><span className="slabel">Sign in</span></a>}
     </nav>
   );
 }
 function TabBar({ route }) {
-  const { user, unread, prefLoc } = useApp();
+  const { user, unread, prefLoc, noteCount } = useApp();
   if (!TOP_LEVEL.includes(route.name)) return null;
   const gate = (h) => (user ? h : '#/login?next=' + enc(h));
   const tabs = [
@@ -733,7 +735,7 @@ function TabBar({ route }) {
     <nav className="tabbar" aria-label="Primary">
       {tabs.map(([n, label, ic, href]) => (
         <a key={n} href={href} aria-current={route.name === n ? 'page' : undefined}>
-          <span className="ticon"><Icon n={ic} size={24} />{n === 'messages' && unread > 0 && <span className="tbadge" aria-label={`${unread} unread`}>{unread}</span>}</span>
+          <span className="ticon"><Icon n={ic} size={24} />{n === 'messages' && unread > 0 && <span className="tbadge" aria-label={`${unread} unread`}>{unread}</span>}{n === 'account' && noteCount > 0 && <span className="tbadge" aria-label={`${noteCount} new`}>{noteCount}</span>}</span>
           <span>{label}</span>
         </a>
       ))}
@@ -751,7 +753,7 @@ function ResetDemo() {
 }
 function Account({ go }) {
   const { live } = useApp();
-  const { user, signOut, theme, themeSel, setTheme, isAdmin } = useApp();
+  const { user, signOut, theme, themeSel, setTheme, isAdmin, noteCount } = useApp();
   const Row = ({ to, title, sub }) => <a className="item nav" href={to}><span className="t"><b>{title}</b>{sub && <span className="muted">{sub}</span>}</span></a>;
   return (
     <div className="page">
@@ -761,9 +763,10 @@ function Account({ go }) {
       </div>
       <h2 className="sech">Selling</h2>
       <div className="list">
+        {user && <Row to="#/activity" title="Activity" sub={noteCount ? `${noteCount} new` : 'Document requests, verification and listing updates'} />}
         <Row to="#/post" title="Post a listing" sub="Free for standard listings" />
         {user && <Row to="#/billing" title="Billing" sub="Plan, sponsored placements, invoices" />}
-        {user && <Row to="#/business-settings" title="Business settings" sub="Verification" />}
+        {user && <Row to="#/business-settings" title="Business settings" sub="Profile and verification" />}
         {isAdmin && <Row to="#/admin" title="Admin" />}
       </div>
       <h2 className="sech">Preferences</h2>
@@ -1509,6 +1512,28 @@ function DocRoom({ l, own, go }) {
   );
 }
 
+const NOTE_ICON = { doc_request: 'lock', doc_granted: 'file', doc_declined: 'lock', doc_revoked: 'lock', verif_ok: 'check', verif_no: 'alert', report_actioned: 'flag' };
+const ago = (t) => { const m = Math.round((Date.now() - t) / 6e4); return m < 1 ? 'Just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : fmtDate(t); };
+function Activity({ go }) {
+  const { user, requireAuth, notes, markNotesRead } = useApp();
+  const [seen] = useState(() => new Set(notes.filter((n) => !n.read).map((n) => n.id)));
+  useEffect(() => { if (!user) requireAuth({ type: 'go', href: '#/activity' }, go, true); }, [user]);
+  useEffect(() => { if (user && notes.some((n) => !n.read)) { const t = setTimeout(markNotesRead, 1200); return () => clearTimeout(t); } }, [user, notes.length]);
+  if (!user) return null;
+  return (
+    <div className="page">
+      <h1>Activity</h1>
+      {notes.length ? <ul className="notes">{notes.map((n) => (
+        <li key={n.id}><a className={'note' + (seen.has(n.id) ? ' new' : '')} href={n.href}>
+          <span className="docicon"><Icon n={NOTE_ICON[n.kind] || 'bell'} size={18} /></span>
+          <span className="t"><b>{n.title}</b>{n.body && <span className="muted">{n.body}</span>}<span className="muted when">{seen.has(n.id) && <span className="sr">New. </span>}{ago(n.at)}</span></span>
+          {seen.has(n.id) && <span className="ndot" aria-hidden="true" />}
+        </a></li>))}</ul>
+        : <div className="empty"><span className="caticon" style={{ background: 'var(--gray-100)' }}><Icon n="bell" size={24} /></span><h2>Nothing yet</h2><p>Document requests on your routes, answers to your requests, verification results and listing updates show up here. Messages stay in Messages.</p></div>}
+    </div>
+  );
+}
+
 function Legal({ route }) {
   const { addTicket, user } = useApp();
   const [f, setF] = useState({ email: user ? user.email : '', topic: 'Question', message: '' });
@@ -1803,6 +1828,8 @@ export default function App() {
   const [liveVerif, setLiveVerif] = useState(null);
   const [liveVerifQueue, setLiveVerifQueue] = useState([]);
   const [liveTickets, setLiveTickets] = useState([]);
+  const [liveNotes, setLiveNotes] = useState([]);
+  const [demoNotes, setDemoNotes] = usePersist('notes', []);
   const [dmOrg, setDmOrg] = usePersist('dmOrg', {});
   const [rooms, setRooms] = usePersist('rooms', DEMO_ROOMS);
   const roomsRef = useRef(rooms); roomsRef.current = rooms;
@@ -1831,7 +1858,7 @@ export default function App() {
   useEffect(() => { if (themeSel !== 'system') document.documentElement.setAttribute('data-theme', themeSel); }, []);
   const setTheme = (t) => { setThemeS(t); if (t === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t); };
   useEffect(() => {
-    const T = { browse: route.query && route.query.cat !== 'all' ? `${TYPES[route.query.cat].label} for sale & lease` : 'Vending machines, parts, locations, routes & services', post: 'Post a listing', saved: 'Saved', messages: 'Messages', mine: 'My listings', account: 'Account', billing: 'Billing', bizsettings: 'Business settings', admin: 'Admin', login: 'Sign in', legal: 'Help & policies', inquire: 'Contact seller' };
+    const T = { activity: 'Activity', browse: route.query && route.query.cat !== 'all' ? `${TYPES[route.query.cat].label} for sale & lease` : 'Vending machines, parts, locations, routes & services', post: 'Post a listing', saved: 'Saved', messages: 'Messages', mine: 'My listings', account: 'Account', billing: 'Billing', bizsettings: 'Business settings', admin: 'Admin', login: 'Sign in', legal: 'Help & policies', inquire: 'Contact seller' };
     if (route.name !== 'listing' && route.name !== 'business') document.title = (T[route.name] || 'VendGrid') + ' · VendGrid';
   }, [route.name, route.query && route.query.cat]);
 
@@ -1860,9 +1887,10 @@ export default function App() {
     const u = session && session.user ? { id: session.user.id, email: session.user.email, name: (session.user.email || '').split('@')[0] } : null;
     setLiveUser(u);
     const c = await refreshCatalog(u && u.id).catch(() => null);
-    if (!u) { setLiveFavs(new Set()); setLiveSearches([]); setLiveConvs([]); setProfile(null); setLiveVerif(null); setLiveVerifQueue([]); setLiveTickets([]); setLiveReports([]); return; }
+    if (!u) { setLiveFavs(new Set()); setLiveSearches([]); setLiveConvs([]); setProfile(null); setLiveVerif(null); setLiveVerifQueue([]); setLiveTickets([]); setLiveReports([]); setLiveNotes([]); return; }
     try { const m = await api.loadMine(u.id); setProfile(m.profile); setLiveFavs(m.favs); setLiveSearches(m.searches); if (m.profile && m.profile.role === 'admin') loadStaff(); if (m.profile && m.profile.org_id) api.loadVerification(m.profile.org_id).then(setLiveVerif).catch(() => {}); else setLiveVerif(null); } catch (e) { /* signed in, but extras failed */ }
     await refreshConvs(u.id, c);
+    api.loadNotes().then(setLiveNotes).catch(() => {});
     const p = pending.current; pending.current = null;
     if (p && p.type === 'save') { setLiveFavs((f) => new Set(f).add(p.id)); api.addFav(u.id, p.id).catch(liveErr); }
     if (p && p.type === 'saveSearch') saveSearch(p.query, true);
@@ -1884,7 +1912,7 @@ export default function App() {
     return () => { alive = false; off && off.unsubscribe(); };
   }, []);
   // light polling for new messages while signed in
-  useEffect(() => { if (!live || !liveUser) return; const t = setInterval(() => refreshConvs(liveUser.id), 20000); return () => clearInterval(t); }, [live, liveUser, liveOrgs, liveListings]);
+  useEffect(() => { if (!live || !liveUser) return; const t = setInterval(() => { refreshConvs(liveUser.id); api.loadNotes().then(setLiveNotes).catch(() => {}); }, 20000); return () => clearInterval(t); }, [live, liveUser, liveOrgs, liveListings]);
 
   const act = (a) => {
     if (a.type === 'save') setFavs((f) => new Set(f).add(a.id));
@@ -2012,6 +2040,10 @@ export default function App() {
     log(`Billing confirmed for ${ref}`);
     });
   };
+  const pushNote = (kind, title, body, href) => setDemoNotes((x) => [{ id: 'n' + Date.now() + Math.random().toString(36).slice(2, 5), kind, title, body, href, at: Date.now(), read: false }, ...x].slice(0, 100));
+  const notes = live ? liveNotes : curUser ? demoNotes : [];
+  const noteCount = notes.filter((n) => !n.read).length;
+  const markNotesRead = () => { if (live) { setLiveNotes((x) => x.map((n) => ({ ...n, read: true }))); api.readNotes().catch(() => {}); } else setDemoNotes((x) => x.map((n) => ({ ...n, read: true }))); };
   const closeTicket = (id) => { if (live) { setLiveTickets((x) => x.map((t) => (t.id === id ? { ...t, status: 'closed' } : t))); api.closeSupport(id).catch(liveErr); return; } setTickets((x) => x.map((t) => (t.id === id ? { ...t, status: 'closed' } : t))); };
   const VERIF_CHECKS = ['Registration document reviewed', 'Business phone confirmed', 'Website domain matches contact email'];
   const verifView = live ? (liveVerif ? { status: liveVerif.status, data: { legal: liveVerif.legal, phone: liveVerif.phone, domain: liveVerif.domain }, reason: liveVerif.reason, expires: liveVerif.expires, checks: VERIF_CHECKS } : { status: 'none' }) : verif;
@@ -2054,11 +2086,12 @@ export default function App() {
       const b = blobs.current[f.id] || new Blob([`${f.name}\n\nSample document for the VendGrid demo.\nIn the live app this is the seller's file, opened through a private link that expires after five minutes.\n`], { type: 'text/plain' });
       return URL.createObjectURL(b);
     },
-    sandboxGrant: async (id) => { const r = roomsRef.current[id]; const a = r && r.access.find((x) => curUser && x.buyer === curUser.email); if (a) await room.decide(id, a.buyer, 'granted'); },
+    sandboxGrant: async (id) => { const r = roomsRef.current[id]; const a = r && r.access.find((x) => curUser && x.buyer === curUser.email); if (a) { await room.decide(id, a.buyer, 'granted'); const l = listings.find((x) => x.id === id); pushNote('doc_granted', 'You can now open the documents for ' + (l ? l.title : 'this route'), 'Links expire after five minutes, and the seller sees when you open each file.', '#/listing/' + id + '/x'); } },
   };
   const decideVerif = (orgId, ok, reason) => {
     if (!isAdmin) { notify('PERMISSION_DENIED'); return; }
     if (live) { api.decideVerification(orgId, ok, reason).then(() => { notify(ok ? 'Business verified' : 'Marked not approved'); loadStaff(); refreshCatalog(liveUser.id).catch(() => {}); }).catch(liveErr); return; }
+    pushNote(ok ? 'verif_ok' : 'verif_no', ok ? `${orgs.dm.name} is now a Verified business` : `Verification for ${orgs.dm.name} wasn’t approved`, ok ? 'The badge shows on your listings for one year.' : reason || 'Details could not be confirmed.', '#/business-settings');
     setVerif((v) => (ok ? { status: 'verified', data: v.data, at: Date.now(), expires: Date.now() + 365 * 864e5, checks: ['Registration document reviewed', 'Business phone confirmed', 'Website domain matches contact email'] } : { status: 'rejected', data: v.data, reason: reason || 'Details could not be confirmed.' }));
     log(ok ? 'Approved business verification' : 'Rejected business verification');
   };
@@ -2072,6 +2105,7 @@ export default function App() {
     }
     const r = reports.find((x) => x.id === id);
     setReports((rs) => rs.map((x) => (x.id === id ? { ...x, status: action === 'withdraw' ? 'actioned' : 'dismissed' } : x)));
+    if (action === 'withdraw' && r) { const l = listings.find((x) => x.id === r.listingId); if (l && l.mine) pushNote('report_actioned', `${l.title} was withdrawn after a report`, `Reason given: ${r.reason}. If you think this is a mistake, use Contact support.`, '#/my-listings'); }
     if (action === 'withdraw' && r) setListings((ls) => ls.map((l) => (l.id === r.listingId && TRANSITIONS[l.status].includes('withdrawn') ? { ...l, status: 'withdrawn', history: [...l.history, { at: Date.now(), to: 'withdrawn' }] } : l)));
     log(`Report ${id}: ${action}`);
   };
@@ -2082,7 +2116,7 @@ export default function App() {
     const h = (e) => { const el = e.target.closest && e.target.closest('a[href^="#/"]'); if (!el || e.defaultPrevented || e.metaKey || e.ctrlKey || e.button) return; e.preventDefault(); go(el.getAttribute('href')); };
     document.addEventListener('click', h); return () => document.removeEventListener('click', h);
   }, [go]);
-  const ctx = { themeSel, seeSearch, listings: allListings, priv, metrics, impr, tickets: live ? liveTickets : tickets, track, trackImpr, addTicket, isPro, isAdmin, plan, promos: promosView, verif: verifView, verifQueue, openVerifDoc, myOrg, saveOrg, room, closeTicket, reports: live ? liveReports : reports, events, invoices, audit, views, subscribe, cancelPlan, promote, cancelPromo, confirmPayment, processEvent, submitVerif, decideVerif, decideReport, bumpView, orgs, user: curUser, favs: curFavs, searches: curSearches, convs: curConvs, live, mode, sendMagicLink, drafts, prefLoc, setPrefLoc, theme, setTheme, unread, notify, requireAuth, signIn, signOut, toggleFav, saveSearch, removeSearch, searchFromText, startInquiry, sendMsg, markRead, setConvStatus, blockConv, report, setStatus, publish, setDraft };
+  const ctx = { themeSel, seeSearch, listings: allListings, priv, metrics, impr, tickets: live ? liveTickets : tickets, track, trackImpr, addTicket, isPro, isAdmin, plan, promos: promosView, notes, noteCount, markNotesRead, verif: verifView, verifQueue, openVerifDoc, myOrg, saveOrg, room, closeTicket, reports: live ? liveReports : reports, events, invoices, audit, views, subscribe, cancelPlan, promote, cancelPromo, confirmPayment, processEvent, submitVerif, decideVerif, decideReport, bumpView, orgs, user: curUser, favs: curFavs, searches: curSearches, convs: curConvs, live, mode, sendMagicLink, drafts, prefLoc, setPrefLoc, theme, setTheme, unread, notify, requireAuth, signIn, signOut, toggleFav, saveSearch, removeSearch, searchFromText, startInquiry, sendMsg, markRead, setConvStatus, blockConv, report, setStatus, publish, setDraft };
 
   let view;
   switch (route.name) {
@@ -2101,6 +2135,7 @@ export default function App() {
     case 'admin': view = <Admin route={route} go={go} />; break;
     case 'account': view = <Account go={go} />; break;
     case 'guide': view = <Guide route={route} go={go} />; break;
+    case 'activity': view = <Activity go={go} />; break;
     default: view = <div className="empty"><h1>We couldn’t find that page</h1><p>Check the link, or head back to the listings.</p><a className="btn" href="#/">Keep browsing</a></div>;
   }
   if (mode === 'checking') view = <div className="grid" aria-busy="true" aria-label="Loading listings">{Array.from({ length: 8 }, (_, i) => <CardSkeleton key={i} />)}</div>;

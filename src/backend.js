@@ -126,10 +126,15 @@ export async function insertListing(user, profile, l, address) {
 }
 
 export async function updateListing(user, id, l, address) {
+  const before = await client.from('vg_listings').select('photos').eq('id', id).maybeSingle();
   const photos = await uploadPhotos(user.id, l.photos);
   const r = await client.from('vg_listings').update(listingToRow({ ...l, photos })).eq('id', id).select().single();
   fail(r.error);
   const a = await client.from('vg_listing_private').upsert({ listing_id: id, address: address || '' }); fail(a.error);
+  // photos the seller removed: delete the files too (only ones in their own folder)
+  const base = client.storage.from('vg-photos').getPublicUrl('x').data.publicUrl.replace(/x$/, '');
+  const gone = ((before.data && before.data.photos) || []).filter((u) => !photos.includes(u) && u.startsWith(base + user.id + '/')).map((u) => u.slice(base.length));
+  if (gone.length) client.storage.from('vg-photos').remove(gone).catch(() => {});
   return rowToListing(r.data, user.id);
 }
 
@@ -261,3 +266,10 @@ export async function loadSupport() {
   return r.data.map((x) => ({ id: x.id, email: x.email, topic: x.topic, message: x.message, status: x.status, at: ts(x.created_at) }));
 }
 export async function closeSupport(id) { const r = await client.from('vg_support').update({ status: 'closed' }).eq('id', id); fail(r.error); }
+
+/* ── in-app notifications (written by database triggers) ── */
+export async function loadNotes() {
+  const r = await client.from('vg_notifications').select('*').order('created_at', { ascending: false }).limit(100); fail(r.error);
+  return r.data.map((n) => ({ id: n.id, kind: n.kind, title: n.title, body: n.body || '', href: n.href, at: ts(n.created_at), read: !!n.read_at }));
+}
+export async function readNotes() { const r = await client.from('vg_notifications').update({ read_at: new Date().toISOString() }).is('read_at', null); fail(r.error); }

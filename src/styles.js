@@ -623,4 +623,17 @@ kbd{font:inherit;font-size:11px;padding:1px 6px;border:1px solid var(--border);b
 .checkrow input{width:20px;height:20px;accent-color:var(--foreground);flex:none}
 label.btn.disabled{opacity:.6;pointer-events:none}
 
+/* activity */
+.notes{list-style:none;margin:0;padding:0;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
+.notes li + li{border-top:1px solid var(--border)}
+.note{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;color:inherit;text-decoration:none;min-height:44px}
+.note:hover{background:var(--background-subtle)}
+.note:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
+.note .t{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.note .t b{font-weight:500;overflow-wrap:anywhere}
+.note.new .t b{font-weight:600}
+.note .t .muted{font-size:13px;line-height:18px;overflow-wrap:anywhere}
+.note .when{font-size:12px}
+.ndot{width:8px;height:8px;border-radius:50%;background:var(--blue);flex:none;margin-top:8px}
+
 `;
