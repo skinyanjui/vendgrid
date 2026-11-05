@@ -1245,6 +1245,7 @@ function Browse({ route, go }) {
   return (
     <>
       <h1 className="sr">{label}{query.q ? ` matching “${query.q}”` : ''}{query.loc ? ` near ${query.loc}` : ''}</h1>
+      {state.status !== 'loading' && query.view !== 'map' && <CityRow items={mapItems} query={query} set={set} />}
       <div className="toprow">
       <div className="chips" role="tablist" aria-label="Category">
         {['all', ...TYPE_KEYS].map((c) => (
@@ -1274,7 +1275,6 @@ function Browse({ route, go }) {
           {tokens.length > 1 && <button className="btn ghost sm" onClick={clearAll}>Clear all</button>}
         </div>
       )}
-      {state.status !== 'loading' && query.view !== 'map' && <CityRow items={mapItems} query={query} set={set} />}
       <div className="ctx" role="status" aria-live="polite">
         <span><b>{label}</b>{query.loc ? ` · ${query.loc}` : <span className="nophone"> · Nationwide</span>}{state.status !== 'loading' && state.status !== 'error' ? ` · ${state.total} ${state.total === 1 ? 'result' : 'results'}` : ''}</span>
         <button className="btn ghost sm savectx" disabled={savedAlready} onClick={() => (user ? saveSearch(query) : requireAuth({ type: 'saveSearch', query }, go))}>{savedAlready ? 'Search saved' : 'Save search'}</button>
