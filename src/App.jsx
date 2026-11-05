@@ -281,7 +281,7 @@ function PriceCheck({ l, listings }) {
 /* What a buyer should confirm before paying — shows which items this listing already answers */
 function BuyerChecklist({ l, onAsk }) {
   if (l.type === 'machines') {
-    const items = [['Condition', l.f.condition], ['Age', l.f.year ? `Built ${l.f.year}` : ''], ['Payment system', l.f.payment], ['Repair & service history', l.f.service], ['Warranty', l.f.warranty], ['Returns', l.f.returns], ['Delivery cost', l.f.shipCost]];
+    const items = [['Condition', l.f.condition], ['Age', l.f.year ? `Built ${l.f.year}` : ''], ['Payment system', [l.f.payment, l.f.cardReader && `card reader ${l.f.cardReader.toLowerCase()}`].filter(Boolean).join(' · ')], ['Size & weight', [l.f.dims, l.f.weight && `${l.f.weight} lb`].filter(Boolean).join(' · ')], ['Repair & service history', l.f.service], ['Warranty', l.f.warranty], ['Returns', l.f.returns], ['Delivery cost', l.f.shipCost]];
     const missing = items.filter(([, v]) => !v).length;
     return (
       <section className="panel checkpanel">
@@ -364,6 +364,36 @@ function Guide({ route, go }) {
           <div className="row2" style={{ flexWrap: 'wrap' }}>{[['1–10', 'Up to 10 machines'], ['11–25', '11–25 machines'], ['26+', '26+ machines']].map(([v, t]) => <Go key={v} href={encodeQuery({ ...DEFAULT_QUERY, f: { machineBand: v }, cat: 'routes' })}>{t}</Go>)}</div>
         </QA>
       </>)}
+    </div>
+  );
+}
+
+/* BizQuest-style money panel for routes. Every figure is seller-reported; the multiple is our arithmetic on them. */
+function RouteFinancials({ l }) {
+  if (l.type !== 'routes') return null;
+  const f = l.f, gross = +f.grossExact || 0, cash = +f.cashExact || 0;
+  const cells = [['Asking price', l.price != null ? FMT(l.price) : 'On request'], ['Gross revenue', gross ? FMT(gross) : f.revenueBand || 'Not disclosed'], ['Cash flow', cash ? FMT(cash) : f.cashFlow || 'Not disclosed'], ['Equipment (FF&E)', f.ffe ? FMT(+f.ffe) : '—'], ['Inventory', f.invValue ? FMT(+f.invValue) : f.inventory || '—'], ['Established', f.established || '—'], ['Employees', f.employees != null && f.employees !== '' ? String(f.employees) : '—'], ['Seller financing', f.financing || '—']];
+  const mult = l.price != null && cash ? (l.price / cash) : null;
+  return (
+    <section className="panel finpanel" aria-labelledby="fin-h">
+      <div className="row2" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}><h3 id="fin-h">Financial snapshot</h3><span className="badge">Seller-reported</span></div>
+      <dl className="fingrid">{cells.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
+      {mult && <p className="muted" style={{ margin: 0, fontSize: 13 }}>Asking price is <b style={{ color: 'var(--foreground)' }}>{mult.toFixed(1)}×</b> the reported cash flow{gross ? `, and ${(cash / gross * 100).toFixed(0)}% of revenue is cash flow` : ''}. Our math on the seller’s numbers, not a valuation.</p>}
+      {f.growth && <p style={{ margin: 0 }}><b>Growth: </b>{f.growth}</p>}
+    </section>
+  );
+}
+
+/* VendPlacer-style "browse by city": real counts for the current category, one tap to filter */
+function CityRow({ items, query, set }) {
+  const counts = {};
+  items.forEach((l) => { const k = `${l.geo.city}, ${l.geo.st}`; counts[k] = (counts[k] || 0) + 1; });
+  const rows = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  if (rows.length < 2 || query.loc) return null;
+  return (
+    <div className="cityrow" aria-label="Browse by city">
+      <span className="muted">{items.length} {query.cat === 'all' ? 'listings' : TYPES[query.cat].label.toLowerCase()} in {Object.keys(counts).length} cities</span>
+      <div className="cities">{rows.map(([c, n]) => <button key={c} className="chip" onClick={() => set({ ...query, loc: c, r: '', n: 1 })}>{c.split(',')[0]} <span className="muted">{n}</span></button>)}</div>
     </div>
   );
 }
@@ -881,7 +911,7 @@ function Browse({ route, go }) {
   Object.entries(query.f).forEach(([k, v]) => { (Array.isArray(v) ? v : [v]).filter(Boolean).forEach((x) => tokens.push([x, () => set({ ...query, n: 1, f: { ...query.f, [k]: Array.isArray(v) ? v.filter((y) => y !== x) : '' } })])); });
   const nFilters = tokens.length;
   const sorts = sortOptions(query);
-  const mapItems = useMemo(() => (query.view === 'map' ? runSearch(listings, orgs, { ...query, n: 99 }).items : []), [listings, orgs, JSON.stringify(query)]);
+  const mapItems = useMemo(() => runSearch(listings, orgs, { ...query, n: 99 }).items, [listings, orgs, JSON.stringify(query)]);
   const clearAll = () => set({ ...DEFAULT_QUERY, f: {}, cat: query.cat, q: query.q, loc: query.loc });
   const label = query.cat === 'all' ? 'All listings' : TYPES[query.cat].label;
   const savedAlready = searches.some((s) => s.href === encodeQuery({ ...query, n: 1 }));
@@ -916,6 +946,7 @@ function Browse({ route, go }) {
           {tokens.length > 1 && <button className="btn ghost sm" onClick={clearAll}>Clear all</button>}
         </div>
       )}
+      {state.status !== 'loading' && <CityRow items={mapItems} query={query} set={set} />}
       <div className="ctx" role="status" aria-live="polite">
         <span><b>{label}</b>{query.loc ? ` · ${query.loc}` : <span className="nophone"> · Nationwide</span>}{state.status !== 'loading' && state.status !== 'error' ? ` · ${state.total} ${state.total === 1 ? 'result' : 'results'}` : ''}</span>
         <button className="btn ghost sm" disabled={savedAlready} onClick={() => (user ? saveSearch(query) : requireAuth({ type: 'saveSearch', query }, go))}>{savedAlready ? 'Search saved' : 'Save search'}</button>
@@ -947,7 +978,7 @@ function Browse({ route, go }) {
 
 /* ───────────── listing detail ───────────── */
 function Detail({ route, go }) {
-  const { listings, orgs, favs, toggleFav, user, requireAuth, notify, report, setStatus, bumpView, track } = useApp();
+  const { listings, orgs, favs, toggleFav, user, requireAuth, notify, report, setStatus, bumpView, track, saveSearch } = useApp();
   const l = listings.find((x) => x.id === route.id);
   useEffect(() => { bumpView(route.id); }, [route.id]);
   const [rep, setRep] = useState(false);
@@ -982,7 +1013,7 @@ function Detail({ route, go }) {
       {!open && (
         <div className="banner" role="status" style={{ marginBottom: 16 }}>
           <b>{l.status === 'sold' ? 'This item has been sold.' : l.status === 'filled' ? 'This opportunity has been filled.' : `This listing is ${STATUS_LABEL[l.status].toLowerCase()} and not accepting inquiries.`}</b>{' '}
-          <a href={encodeQuery({ ...DEFAULT_QUERY, f: {}, cat: l.type, loc: l.geo.city + ', ' + l.geo.st })}><u>See similar {t.label.toLowerCase()} near {l.geo.city}</u></a>
+          <a href={encodeQuery({ ...DEFAULT_QUERY, f: {}, cat: l.type, loc: l.geo.city + ', ' + l.geo.st })}><u>See similar {t.label.toLowerCase()} near {l.geo.city}</u></a>{' '}<button className="btn secondary sm" style={{ marginLeft: 8 }} onClick={() => { const sq = { ...DEFAULT_QUERY, f: l.type === 'machines' && l.f.machineType ? { machineType: l.f.machineType } : {}, cat: l.type }; user ? saveSearch(sq) : requireAuth({ type: 'saveSearch', query: sq }, go); }}><Icon n="send" size={14} />Alert me to similar</button>
         </div>
       )}
       <div className="detail">
@@ -997,6 +1028,7 @@ function Detail({ route, go }) {
             <button className="btn secondary" aria-pressed={saved} onClick={() => toggleFav(l.id)}><Icon n="heart" size={16} />{saved ? 'Saved' : 'Save'}</button>
             <button className="btn secondary" onClick={share}><Icon n="share" size={16} />Share</button>
           </div>
+          <RouteFinancials l={l} />
           <dl className="facts" style={{ margin: 0 }}>{primary.map(row)}</dl>
           <div className="sect"><h2>Description</h2><p style={{ margin: 0, maxWidth: 680, fontSize: 16, lineHeight: '24px' }}>{l.desc}</p></div>
           {l.type === 'routes' && <p className="muted" style={{ margin: 0 }}>Financial figures are reported by the seller and are not independently verified. VendGrid does not estimate returns.</p>}
@@ -1041,7 +1073,7 @@ function Detail({ route, go }) {
           <div className="extra muted" style={{ fontSize: 12, lineHeight: '16px' }}>VendGrid connects buyers and sellers. It doesn't hold funds, provide escrow or verify condition or revenue.</div>
         </aside>
       </div>
-      {movers.length > 0 && <section className="sect" style={{ marginTop: 48 }}><h2>Move it</h2><div className="list">{movers.map((x) => <a className="item nav" key={x.id} href={hrefFor(x)}><span className="iq-photo sm">{x.photos[0] ? <img src={x.photos[0]} alt="" /> : <Icon n="wrench" size={20} />}</span><span className="t"><b>{x.title}</b><span className="muted">{orgs[x.org].name} · {x.f.rate || 'Request quote'} · serves {l.geo.city}</span></span></a>)}</div></section>}
+      {movers.length > 0 && <section className="sect" style={{ marginTop: 48 }}><h2>Move it</h2>{l.f.weight > 0 && <p className="muted iconline" style={{ margin: '0 0 8px' }}><Icon n="alert" size={14} />About {l.f.weight} lb{l.f.dims ? `, ${l.f.dims}` : ''}. Plan for a liftgate or pallet jack and measure doorways.</p>}<div className="list">{movers.map((x) => <a className="item nav" key={x.id} href={hrefFor(x)}><span className="iq-photo sm">{x.photos[0] ? <img src={x.photos[0]} alt="" /> : <Icon n="wrench" size={20} />}</span><span className="t"><b>{x.title}</b><span className="muted">{orgs[x.org].name} · {x.f.rate || 'Request quote'} · serves {l.geo.city}</span></span></a>)}</div></section>}
       {fitParts.length > 0 && <section className="sect" style={{ marginTop: 48 }}><div className="row2" style={{ justifyContent: 'space-between' }}><h2>Parts that fit {l.f.manufacturer}</h2><a className="btn ghost sm" href={encodeQuery({ ...DEFAULT_QUERY, f: { brands: l.f.manufacturer }, cat: 'parts' })}>See all<Icon n="chev" size={16} /></a></div><div className="grid">{fitParts.map((x) => <ListingCard key={x.id} l={x} />)}</div></section>}
       {related.length > 0 && <section className="sect" style={{ marginTop: 48 }}><h2>More {t.label.toLowerCase()}</h2><div className="grid">{related.map((x) => <ListingCard key={x.id} l={x} />)}</div></section>}
     </div>

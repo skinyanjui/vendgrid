@@ -586,4 +586,14 @@ kbd{font:inherit;font-size:11px;padding:1px 6px;border:1px solid var(--border);b
 .pg{display:flex;flex-direction:column;gap:2px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-lg);color:inherit;text-decoration:none}
 .pg:hover{border-color:var(--foreground)}
 .pg b{font-size:16px}.pg small{font-size:12px;color:var(--text-muted)}
+.finpanel h3{margin:0}
+.fingrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px;margin:0}
+@media(min-width:600px){.fingrid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.fingrid dt{font-size:12px;line-height:16px;color:var(--text-muted)}
+.fingrid dd{margin:2px 0 0;font-size:16px;line-height:22px;font-weight:600}
+.cityrow{display:flex;flex-direction:column;gap:6px;margin:4px 0 4px}
+.cityrow>.muted{font-size:12px;line-height:16px}
+.cities{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.cities .chip{flex:none;display:inline-flex;gap:6px;align-items:center}
+.cities .chip .muted{font-size:12px}
 `;

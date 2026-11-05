@@ -169,4 +169,4 @@ export function describeQuery(query) {
   return bits;
 }
 
-export const priceText = (l) => (l.type === 'wanted' ? (l.price != null ? 'Budget ' + FMT(l.price) : 'Budget open') : l.price != null ? FMT(l.price) : l.priceType === 'negotiable' ? 'Negotiable' : l.type === 'locations' ? 'Accepting proposals' : l.type === 'services' ? (l.f.rate || 'Request quote') : TYPES[l.type].noPriceText);
+export const priceText = (l) => (l.type === 'wanted' ? (l.price != null ? 'Budget ' + FMT(l.price) : 'Budget open') : l.price != null ? FMT(l.price) : l.priceType === 'negotiable' ? 'Negotiable' : l.type === 'locations' ? (l.f && +l.f.commission ? `${+l.f.commission}% commission` : l.f && +l.f.rent ? `${FMT(+l.f.rent)}/mo rent asked` : l.f && l.f.terms === 'Free placement' ? 'Free placement' : 'Accepting proposals') : l.type === 'services' ? (l.f.rate || 'Request quote') : TYPES[l.type].noPriceText);
