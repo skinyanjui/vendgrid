@@ -756,4 +756,36 @@ a.u{text-decoration:underline;text-underline-offset:2px}
 /* The side menu already lists the categories, so the chip row only shows where the side menu doesn't: phones, and the full-screen map. */
 @media(min-width:768px){.layout:not(.navoff) .toprow .chips{display:none}.layout:not(.navoff) .toprow .bar{margin-left:0;width:100%;justify-content:flex-start}.layout:not(.navoff) .toprow .bar .grow{flex:1}}
 
+/* ── authentication pages ── */
+.authgrid{display:grid;grid-template-columns:minmax(0,1fr);gap:24px;max-width:1040px;margin:0 auto;padding:8px 0 24px}
+.authaside{display:none}
+.authmain{min-width:0;display:flex;justify-content:center}
+.page.authcard{width:100%;max-width:440px;margin:0;gap:16px}
+.authtabs{display:flex;gap:4px;padding:4px;border-radius:var(--radius-lg);background:var(--gray-100)}
+.authtabs a{flex:1;min-height:40px;display:flex;align-items:center;justify-content:center;border-radius:var(--radius-md);font-weight:500;color:var(--text-muted)}
+.authtabs a[aria-current=page]{background:var(--background);color:var(--foreground);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.gbtn{gap:10px}
+.orline{display:flex;align-items:center;gap:12px;color:var(--text-muted);font-size:12px}
+.orline:before,.orline:after{content:"";flex:1;height:1px;background:var(--border)}
+.pwwrap{position:relative;display:block}
+.pwwrap .input{padding-right:48px}
+.pwtoggle{position:absolute;right:2px;top:50%;transform:translateY(-50%)}
+.pwrules{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--text-muted)}
+.pwrules li{display:flex;align-items:center;gap:6px}
+.pwrules li.ok{color:var(--green)}
+.authforgot{align-self:flex-start;min-height:44px;padding:0 4px}
+.checkrow{display:flex;gap:10px;align-items:flex-start;font-size:13px;line-height:20px}
+.checkrow input{flex:none;width:20px;height:20px;margin-top:0}
+.codeinput{font-size:28px;letter-spacing:.4em;text-align:center;font-variant-numeric:tabular-nums;height:60px;padding-left:.4em}
+.btn.block{width:100%}
+@media(min-width:900px){
+  .authgrid{grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:56px;align-items:center;padding-top:32px}
+  .authaside{display:flex;flex-direction:column;gap:20px;padding:32px;border-radius:var(--radius-xl);background:var(--gray-100)}
+  .authaside h2{margin:0;font-size:28px;line-height:34px;letter-spacing:-.02em}
+  .authaside ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:16px}
+  .authaside li{display:flex;gap:12px;align-items:flex-start;line-height:22px}
+  .authaside li svg{flex:none;margin-top:2px;color:var(--blue)}
+}
+@media(max-width:380px){.codeinput{font-size:24px;letter-spacing:.3em}.authtabs a{font-size:14px}}
+
 `;

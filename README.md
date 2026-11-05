@@ -69,3 +69,26 @@ supabase/   schema migration and seed
 ## Public information pages
 
 `src/info.js` holds the About, Seller guide, Pricing and Safety pages (same shape as `src/legal.js`). The app renders them at `#/about`, `#/seller-guide`, `#/pricing`, `#/safety`, and `api/seo.js` renders the same content at `/about`, `/seller-guide`, `/pricing` and `/safety` for search engines, with all four in the sitemap. `/support` and `/sellers` are app screens that get their own title and canonical link from the server (`/sellers` is noindex). Unknown addresses are served `dist/404.html` (a copy of the app) with a 404 status, and the app shows its not-found screen. Keep `src/info.js` true to how the product works, especially pricing and the trust rules.
+
+## Authentication setup
+
+The app signs people in four ways, and the pages only offer what the Supabase project allows (they read `/auth/v1/settings`):
+
+- **Email code or link** (always on): `signInWithOtp`. The email carries a link and, if the template includes it, a 6-digit code.
+- **Email + password**: sign-up, sign-in, forgot and reset password. Passwords need 10+ characters with a letter and a number (enforced in the app; set the same minimum in Authentication → Providers → Email).
+- **Google**: shows up automatically once the Google provider is enabled (Authentication → Providers → Google, with an OAuth client ID and secret).
+- Sessions: expired sessions return the person to the page they were on after they sign in again. "Sign out on other devices" and "Sign out everywhere" are in Settings.
+
+Dashboard steps (Authentication):
+
+1. **URL Configuration**: Site URL `https://vendgrid.vercel.app`; Redirect URLs `https://vendgrid.vercel.app/**` (add your own domain when you have one).
+2. **Email templates**: add the code to the Magic Link, Confirm signup and Reset Password templates so people can type it on another device:
+
+   ```html
+   <h2>Your VendGrid code</h2>
+   <p>Enter this code: <strong>{{ .Token }}</strong></p>
+   <p>Or <a href="{{ .ConfirmationURL }}">tap this link</a> on the device where you asked for it.</p>
+   <p>It works once and expires in an hour. If you didn't ask for it, ignore this email.</p>
+   ```
+3. **Google** (optional): create an OAuth client at console.cloud.google.com (Web application), set its redirect URI to `https://bfovgafcfetfeqykjfco.supabase.co/auth/v1/callback`, and paste the ID and secret into the Google provider.
+4. **Password policy**: minimum length 10, and turn on leaked-password protection if your plan has it.

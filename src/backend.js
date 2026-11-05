@@ -273,6 +273,50 @@ export async function loadNotes() {
 }
 export async function readNotes() { const r = await client.from('vg_notifications').update({ read_at: new Date().toISOString() }).is('read_at', null); fail(r.error); }
 
+/* ── sign-in methods ── */
+let authSettings = null;
+/** What this project allows (read from the public auth settings), so the pages only offer what works. */
+export async function loadAuthSettings() {
+  if (authSettings) return authSettings;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/settings`, { headers: { apikey: SUPABASE_KEY } });
+    const j = await r.json();
+    const ex = j.external || {};
+    authSettings = { google: !!ex.google, password: ex.email !== false, signup: !j.disable_signup, confirm: !j.mailer_autoconfirm };
+  } catch (e) { authSettings = { google: false, password: true, signup: true, confirm: true }; }
+  return authSettings;
+}
+const back = () => location.origin + location.pathname;
+export async function sendEmailCode(email, name) {
+  const { error } = await client.auth.signInWithOtp({ email, options: { emailRedirectTo: back(), data: name ? { full_name: name } : undefined } });
+  if (error) throw error;
+}
+export async function verifyEmailCode(email, token, type = 'email') {
+  const { data, error } = await client.auth.verifyOtp({ email, token, type });
+  if (error) throw error;
+  return data;
+}
+export async function passwordSignIn(email, password) {
+  const { data, error } = await client.auth.signInWithPassword({ email, password });
+  if (error) throw error;
+  return data;
+}
+export async function passwordSignUp(email, password, name) {
+  const { data, error } = await client.auth.signUp({ email, password, options: { emailRedirectTo: back(), data: name ? { full_name: name } : undefined } });
+  if (error) throw error;
+  return data;
+}
+export async function sendPasswordReset(email) { const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo: back() }); if (error) throw error; }
+export async function setNewPassword(password) { const { error } = await client.auth.updateUser({ password }); if (error) throw error; }
+export async function googleSignIn() { const { error } = await client.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: back() } }); if (error) throw error; }
+export async function signOutOthers() { const { error } = await client.auth.signOut({ scope: 'others' }); if (error) throw error; }
+export async function saveDisplayName(userId, name) {
+  const a = await client.auth.updateUser({ data: { full_name: name } });
+  if (a.error) throw a.error;
+  const r = await client.from('vg_profiles').update({ name }).eq('user_id', userId);
+  if (r.error) throw r.error;
+}
+
 /* ── account and data ── */
 export async function changeEmail(email) {
   const { error } = await client.auth.updateUser({ email }, { emailRedirectTo: location.origin + '/' });

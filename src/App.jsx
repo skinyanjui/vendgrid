@@ -57,7 +57,9 @@ export function parseHash(h) {
     case 'messages': return { name: 'messages', tab: sp.get('tab') || 'conversations', c: sp.get('c') || '' };
     case 'my-listings': return { name: 'mine' };
     case 'business': return { name: 'business', slug: seg[1] };
-    case 'login': return { name: 'login', next: sp.get('next') || '#/' };
+    case 'login': return { name: 'login', next: sp.get('next') || '#/', reason: sp.get('reason') || '', forgot: sp.get('forgot') === '1' };
+    case 'signup': return { name: 'login', mode: 'signup', next: sp.get('next') || '#/' };
+    case 'reset-password': return { name: 'login', mode: 'reset', next: sp.get('next') || '#/' };
     case 'legal': return { name: 'legal', doc: sp.get('doc') || 'terms' };
     case 'billing': return { name: 'billing' };
     case 'business-settings': return { name: 'bizsettings' };
@@ -87,6 +89,7 @@ export function toAddr(h) {
     case 'mine': return '#my-listings';
     case 'bizsettings': return '#business-settings';
     case 'notfound': return '#404';
+    case 'login': return r.mode === 'signup' ? '#signup' : r.mode === 'reset' ? '#reset-password' : '#login';
     case 'info': return '#' + r.doc;
     case 'legal': return r.doc === 'support' ? '#support' : '#legal';
     default: return '#' + r.name;
@@ -106,7 +109,7 @@ export function fromAddr(a) {
   if (s === '404') return '#/404';
   if (INFO_KEYS.includes(s) || s === 'support' || s === 'sellers') return '#/' + s;
   if (s === 'my-listings') return '#/my-listings';
-  if (['post', 'saved', 'messages', 'login', 'account', 'billing', 'admin', 'legal', 'guide', 'activity', 'settings'].includes(s)) return '#/' + s;
+  if (['post', 'saved', 'messages', 'login', 'signup', 'reset-password', 'account', 'billing', 'admin', 'legal', 'guide', 'activity', 'settings'].includes(s)) return '#/' + s;
   return '#/';
 }
 
@@ -863,7 +866,9 @@ function ResetDemo() {
   );
 }
 function Settings({ go }) {
-  const { user, live, requireAuth, themeSel, setTheme, prefLoc, setPrefLoc, changeEmail, signOutAll, exportData, deleteData, notify } = useApp();
+  const { user, live, requireAuth, themeSel, setTheme, prefLoc, setPrefLoc, changeEmail, signOutAll, signOutOthers, saveName, setPassword, exportData, deleteData, notify } = useApp();
+  const [nmOpen, setNmOpen] = useState(false), [nm, setNm] = useState('');
+  const [pwOpen, setPwOpen] = useState(false), [pw1, setPw1] = useState(''), [pw2, setPw2] = useState('');
   const [em, setEm] = useState(''), [emOpen, setEmOpen] = useState(false), [emMsg, setEmMsg] = useState(null);
   const [loc, setLoc] = useState(prefLoc || '');
   const [del, setDel] = useState(false), [word, setWord] = useState('');
@@ -880,6 +885,13 @@ function Settings({ go }) {
       <section className="stack" aria-labelledby="st-in">
         <h2 id="st-in" className="sech">Sign-in</h2>
         <div className="list">
+          <div className="item static"><span className="t"><b>Name</b><span className="muted" style={{ overflowWrap: 'anywhere' }}>{user.name}</span></span>{!nmOpen && <button className="btn secondary sm" onClick={() => { setNm(user.name); setNmOpen(true); }}>Change</button>}</div>
+          {nmOpen && (
+            <form className="item static stack" style={{ alignItems: 'stretch' }} noValidate onSubmit={(e) => { e.preventDefault(); if (!nm.trim()) { setErr((x) => ({ ...x, nm: 'Enter the name to show.' })); return; } run('nm', async () => { await saveName(nm); setNmOpen(false); notify('Name updated'); }); }}>
+              <Field id="st-nm" label="Your name" error={err.nm}><input id="st-nm" className={'input full' + (err.nm ? ' bad' : '')} autoComplete="name" maxLength={80} value={nm} onChange={(e) => { setNm(e.target.value); setErr((x) => ({ ...x, nm: '' })); }} /></Field>
+              <div className="row2"><button className="btn sm" disabled={busy === 'nm'}>{busy === 'nm' ? 'Saving…' : 'Save name'}</button><button type="button" className="btn ghost sm" onClick={() => setNmOpen(false)}>Cancel</button></div>
+            </form>
+          )}
           <div className="item static"><span className="t"><b>Email</b><span className="muted" style={{ overflowWrap: 'anywhere' }}>{user.email}</span></span>{!emOpen && <button className="btn secondary sm" onClick={() => { setEmOpen(true); setEmMsg(null); }}>Change</button>}</div>
           {emOpen && (
             <form className="item static stack" style={{ alignItems: 'stretch' }} noValidate onSubmit={(e) => { e.preventDefault(); const v = em.trim(); if (!/^\S+@\S+\.\S+$/.test(v)) { setErr((x) => ({ ...x, em: 'That email doesn’t look right. Try name@example.com.' })); return; } if (v.toLowerCase() === user.email.toLowerCase()) { setErr((x) => ({ ...x, em: 'That’s already your email.' })); return; } run('em', async () => { await changeEmail(v); setEmMsg(v); setEm(''); setEmOpen(false); }); }}>
@@ -889,11 +901,24 @@ function Settings({ go }) {
           )}
         </div>
         {emMsg && <div className="banner" role="status">{live ? <>Check <b>{emMsg}</b> for a confirmation link. Your email changes after you confirm. Until then, keep signing in with {user.email}.</> : <>Email changed to <b>{emMsg}</b>.</>}</div>}
-        <p className="muted iconline" style={{ margin: 0, fontSize: 13 }}><Icon n="lock" size={14} />No password. Each sign-in uses a one-time link sent to this email.</p>
         <div className="list">
+          <div className="item static"><span className="t"><b>Password</b><span className="muted">Optional. You can always sign in with a code emailed to you.</span></span>{!pwOpen && <button className="btn secondary sm" onClick={() => { setPwOpen(true); setPw1(''); setPw2(''); }}>Set or change</button>}</div>
+          {pwOpen && (
+            <form className="item static stack" style={{ alignItems: 'stretch' }} noValidate onSubmit={(e) => { e.preventDefault(); if (!pwOk(pw1, user.email)) { setErr((x) => ({ ...x, pw1: 'Choose a password that meets every requirement below.' })); return; } if (pw1 !== pw2) { setErr((x) => ({ ...x, pw2: 'The two passwords don’t match.' })); return; } run('pw', async () => { await setPassword(pw1); setPwOpen(false); setPw1(''); setPw2(''); notify('Password updated'); }); }}>
+              <PasswordField id="st-pw1" label="New password" value={pw1} onChange={(v) => { setPw1(v); setErr((x) => ({ ...x, pw1: '' })); }} error={err.pw1} autoComplete="new-password" rules email={user.email} />
+              <PasswordField id="st-pw2" label="Confirm new password" value={pw2} onChange={(v) => { setPw2(v); setErr((x) => ({ ...x, pw2: '' })); }} error={err.pw2} autoComplete="new-password" />
+              {err.pw && <div className="err" role="alert">{err.pw}</div>}
+              <div className="row2"><button className="btn sm" disabled={busy === 'pw'}>{busy === 'pw' ? 'Saving…' : 'Update password'}</button><button type="button" className="btn ghost sm" onClick={() => setPwOpen(false)}>Cancel</button></div>
+            </form>
+          )}
+        </div>
+        <p className="muted iconline" style={{ margin: 0, fontSize: 13 }}><Icon n="lock" size={14} />Signed in with {(user.providers || ['email']).map((p) => (p === 'google' ? 'Google' : 'email')).filter((v, i, a) => a.indexOf(v) === i).join(' and ')}.</p>
+        <div className="list">
+          <button className="item" disabled={busy === 'oth'} onClick={() => run('oth', async () => { await signOutOthers(); notify(live ? 'Signed out everywhere else' : 'Demo: only this browser is signed in'); })}><span className="t"><b>Sign out on other devices</b><span className="muted">Keeps you signed in here</span></span></button>
           <button className="item" disabled={busy === 'out'} onClick={() => run('out', async () => { await signOutAll(); go('#/', true); })}><span className="t"><b>Sign out on all devices</b><span className="muted">Ends every session, including this one</span></span></button>
         </div>
         {err.out && <div className="err" role="alert">{err.out}</div>}
+        {err.oth && <div className="err" role="alert">{err.oth}</div>}
       </section>
 
       <section className="stack" aria-labelledby="st-ap">
@@ -2011,53 +2036,229 @@ const MAIL_APPS = { 'gmail.com': ['Gmail', 'https://mail.google.com/'], 'googlem
 const TYPOS = { 'gmial.com': 'gmail.com', 'gmai.com': 'gmail.com', 'gmail.co': 'gmail.com', 'gmail.con': 'gmail.com', 'gamil.com': 'gmail.com', 'hotmial.com': 'hotmail.com', 'hotmail.con': 'hotmail.com', 'outlok.com': 'outlook.com', 'outlook.con': 'outlook.com', 'yaho.com': 'yahoo.com', 'yahoo.con': 'yahoo.com', 'icloud.con': 'icloud.com' };
 const emailTypo = (e) => { const [u, d] = e.trim().toLowerCase().split('@'); return d && TYPOS[d] ? `${u}@${TYPOS[d]}` : ''; };
 
+/* ───────────── authentication ───────────── */
+const PW_MIN = 10;
+const pwChecks = (p, email) => [
+  [p.length >= PW_MIN, `At least ${PW_MIN} characters`],
+  [/[A-Za-z]/.test(p) && /\d/.test(p), 'A letter and a number'],
+  [!!p && p.toLowerCase() !== String(email || '').trim().toLowerCase(), 'Not your email address'],
+];
+const pwOk = (p, email) => pwChecks(p, email).every((c) => c[0]);
+const validEmail = (e) => /^\S+@\S+\.\S+$/.test(e);
+/* Plain-language text for the errors Supabase and the demo throw. */
+const authMsg = (x) => {
+  const m = String((x && x.message) || x || '');
+  if (/invalid login|invalid credentials/i.test(m)) return 'That email and password don’t match. Check them, or email yourself a sign-in code instead.';
+  if (/rate|seconds|too many|over_email|limit/i.test(m)) return 'Too many tries. Wait a minute and try again.';
+  if (/weak|short|at least|password should/i.test(m)) return m;
+  if (/expired|invalid|otp|token|code/i.test(m)) return 'That code isn’t right or has expired. Check it, or ask for a new one.';
+  if (/failed to fetch|network|load failed/i.test(m)) return 'We couldn’t reach VendGrid. Check your connection and try again.';
+  return 'Something went wrong. Try again in a moment.';
+};
+const GoogleMark = () => (
+  <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" /><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" /><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" /><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" /></svg>
+);
+function PasswordField({ id, label, value, onChange, error, hint, autoComplete, rules, email, autoFocus }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="stack" style={{ gap: 8 }}>
+      <Field id={id} label={label} error={error} hint={hint}>
+        <span className="pwwrap">
+          <input id={id} className={'input full' + (error ? ' bad' : '')} type={show ? 'text' : 'password'} autoComplete={autoComplete} autoCapitalize="none" autoCorrect="off" spellCheck={false} autoFocus={autoFocus} aria-invalid={!!error} aria-describedby={error ? id + '-e' : undefined} value={value} onChange={(e) => onChange(e.target.value)} />
+          <button type="button" className="iconbtn pwtoggle" aria-label={show ? 'Hide password' : 'Show password'} aria-pressed={show} onClick={() => setShow(!show)}><Icon n={show ? 'eyeoff' : 'eye'} size={18} /></button>
+        </span>
+      </Field>
+      {rules && value && <ul className="pwrules" aria-label="Password requirements">{pwChecks(value, email).map(([ok, t]) => <li key={t} className={ok ? 'ok' : ''}><Icon n={ok ? 'check' : 'circle'} size={14} /><span>{t}<span className="sr">{ok ? ', met' : ', not met yet'}</span></span></li>)}</ul>}
+    </div>
+  );
+}
+function AuthShell({ children }) {
+  return (
+    <div className="authgrid">
+      <aside className="authaside" aria-label="About your account">
+        <BrandMark />
+        <h2>One account for buying, selling and talking</h2>
+        <ul>
+          <li><Icon n="heart" size={18} /><span><b>Save</b> listings and searches, and get back to them on any device.</span></li>
+          <li><Icon n="send" size={18} /><span><b>Message</b> sellers. Every conversation stays tied to the listing it is about.</span></li>
+          <li><Icon n="box" size={18} /><span><b>Post</b> machines, parts, locations, routes and services for free.</span></li>
+          <li><Icon n="check" size={18} /><span><b>Verified</b> is earned by review, never bought.</span></li>
+        </ul>
+      </aside>
+      <div className="authmain">{children}</div>
+    </div>
+  );
+}
+
 function Login({ route, go }) {
-  const { signIn, live, sendMagicLink, user, authFail } = useApp();
+  const { user, live, authFail, authCfg, sendCode, verifyCode, passwordSignIn, passwordSignUp, sendReset, setPassword, googleSignIn, notify } = useApp();
+  const mode = route.mode || 'signin'; // signin | signup | reset
+  const [view, setView] = useState('form'); // form | forgot | code
+  const [kind, setKind] = useState('email'); // what the emailed code confirms: email | signup | recovery
   const [email, setEmail] = useState('');
-  const [err, setErr] = useState('');
-  const [sent, setSent] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [name, setName] = useState('');
+  const [pw, setPw] = useState('');
+  const [pw2, setPw2] = useState('');
+  const [agree, setAgree] = useState(false);
+  const [code, setCode] = useState('');
+  const [err, setErr] = useState({});
+  const [busy, setBusy] = useState('');
   const [wait, setWait] = useState(0);
+  const [unconfirmed, setUnconfirmed] = useState(false);
+  const next = route.next || '#/';
+  useEffect(() => { setView('form'); setErr({}); setPw(''); setPw2(''); setCode(''); setUnconfirmed(false); }, [mode]);
+  useEffect(() => { if (route.forgot) setView('forgot'); }, [route.forgot]);
   useEffect(() => { if (wait <= 0) return; const t = setTimeout(() => setWait(wait - 1), 1000); return () => clearTimeout(t); }, [wait]);
   const linkErr = useMemo(() => { try { const h = new URLSearchParams((location.hash || '').replace(/^#\/?/, '').replace(/^[^&=]*(?=&)/, '')); const q = new URLSearchParams(location.search); return h.get('error_description') || q.get('error_description') || ''; } catch (e) { return ''; } }, []);
-  const send = async () => { setBusy(true); setErr(''); try { await sendMagicLink(email.trim().toLowerCase(), route.next); setSent(true); setWait(30); } catch (x) { setErr(/rate|seconds|too many/i.test(x.message) ? 'Too many links requested. Wait a minute and try again.' : 'We couldn’t send the link. Try again in a moment.'); } setBusy(false); };
-  if (live) {
-    if (user) return <div className="page" style={{ maxWidth: 420, margin: '0 auto' }}><h1>You’re signed in</h1><p className="muted" style={{ margin: 0 }}>{user.email}</p><a className="btn" href={route.next || '#/'}>Continue</a></div>;
-    if (sent) return (
-      <div className="page" style={{ maxWidth: 420, margin: '0 auto' }}>
-        <span className="caticon" style={{ background: 'var(--gray-100)' }}><Icon n="send" size={24} /></span>
-        <h1>Check your email</h1>
-        <p style={{ margin: 0 }}>We sent a sign-in link to <b>{email}</b>. Open it on this device to finish signing in.</p>
-        <p className="muted" style={{ margin: 0 }}>It can take a minute. Check your spam folder too. The link works once and expires in an hour.</p>
-        {MAIL_APPS[email.trim().toLowerCase().split('@')[1]] && <a className="btn secondary" href={MAIL_APPS[email.trim().toLowerCase().split('@')[1]][1]} target="_blank" rel="noopener noreferrer"><Icon n="ext" size={16} />Open {MAIL_APPS[email.trim().toLowerCase().split('@')[1]][0]}</a>}
-        <div className="row2" style={{ flexWrap: 'wrap' }}>
-          <button className="btn secondary" disabled={wait > 0 || busy} onClick={send}>{busy ? 'Sending…' : wait > 0 ? `Send again in ${wait}s` : 'Send again'}</button>
-          <button className="btn ghost" onClick={() => { setSent(false); setErr(''); }}>Use a different email</button>
-        </div>
-        {err && <div className="err" role="alert">{err}</div>}
-      </div>
-    );
+  const em = email.trim().toLowerCase();
+  const setE = (k, v) => setErr((e) => ({ ...e, [k]: v }));
+  const run = async (k, fn) => { setBusy(k); setErr({}); try { await fn(); } catch (x) { setErr({ form: authMsg(x), raw: String((x && x.message) || '') }); } setBusy(''); };
+  const done = (to) => { if (to !== undefined) go(to || next, true); }; // demo sign-ins return where to go; live ones are finished by the session listener
+  const needEmail = () => { if (!validEmail(em)) { setE('email', 'That email doesn’t look right. Try name@example.com.'); return false; } return true; };
+  const toCode = (k) => { setKind(k); setCode(''); setView('code'); setWait(30); };
+
+  const emailMe = (k) => { if (!needEmail()) return; return run('code', async () => { await sendCode(em, mode === 'signup' ? name.trim() : '', next); toCode(k || 'email'); }); };
+  const submitSignin = (e) => {
+    e.preventDefault(); setUnconfirmed(false);
+    if (!needEmail()) return;
+    if (!pw) { setE('pw', 'Enter your password, or email yourself a sign-in code.'); return; }
+    run('pw', async () => { try { done(await passwordSignIn(em, pw, next)); } catch (x) { if (/not confirmed/i.test(String(x && x.message))) { setUnconfirmed(true); throw new Error('Confirm your email first. We can send you a code.'); } throw x; } });
+  };
+  const submitSignup = (e) => {
+    e.preventDefault();
+    const bad = {};
+    if (!name.trim()) bad.name = 'Tell us what to call you.';
+    if (!validEmail(em)) bad.email = 'That email doesn’t look right. Try name@example.com.';
+    if (!pwOk(pw, em)) bad.pw = 'Choose a password that meets every requirement below.';
+    if (!agree) bad.agree = 'Please confirm to continue.';
+    if (Object.keys(bad).length) { setErr(bad); return; }
+    run('pw', async () => { const r = await passwordSignUp(em, pw, name.trim(), next); if (r && r.needsCode) toCode('signup'); else done(r && r.to); });
+  };
+  const submitForgot = (e) => { e.preventDefault(); if (!needEmail()) return; run('code', async () => { await sendReset(em); toCode('recovery'); }); };
+  const verify = (c) => run('verify', async () => {
+    if (!/^\d{6}$/.test(c)) throw new Error('code');
+    const r = await verifyCode(em, c, kind, next);
+    if (kind === 'recovery') go('#/reset-password', true); else done(r);
+  });
+  const resend = () => run('code', async () => { if (kind === 'recovery') await sendReset(em); else await sendCode(em, '', next); setWait(30); notify('A new code is on its way'); });
+  const submitReset = (e) => {
+    e.preventDefault();
+    if (!pwOk(pw, user && user.email)) { setE('pw', 'Choose a password that meets every requirement below.'); return; }
+    if (pw !== pw2) { setE('pw2', 'The two passwords don’t match.'); return; }
+    run('pw', async () => { await setPassword(pw); notify('Password updated'); go(route.next && route.next !== '#/' ? route.next : '#/', true); });
+  };
+  const google = () => run('g', async () => { done(await googleSignIn(next)); });
+
+  const mailApp = MAIL_APPS[em.split('@')[1]];
+  const alerts = (
+    <>
+      {authFail && !linkErr && !err.form && <div className="alert" role="alert"><span>That link couldn’t sign you in here. Links only work in the browser where you asked for them, and only once. Request a new one, or use the code from the email.</span></div>}
+      {linkErr && !err.form && <div className="alert" role="alert"><span>{/expired|invalid/i.test(linkErr) ? 'That link expired or was already used. Request a new one, or use the code from the email.' : linkErr.replace(/\+/g, ' ')}</span></div>}
+      {route.reason === 'expired' && !err.form && <div className="banner" role="status">Your session ended, so we signed you out to keep your account safe. Sign in again and we’ll take you back.</div>}
+      {err.form && <div className="alert" role="alert"><span>{err.form}</span>{unconfirmed && <button type="button" className="btn secondary sm" onClick={() => emailMe('signup')}>Send me a code</button>}</div>}
+    </>
+  );
+  const legal = <p className="muted" style={{ margin: 0, fontSize: 12 }}>By continuing you confirm you’re 18 or older and agree to the <a className="u" href="#/legal?doc=terms">Terms</a> and <a className="u" href="#/legal?doc=privacy">Privacy policy</a>.</p>;
+  const demoNote = !live && <p className="muted" style={{ margin: 0, fontSize: 12 }}>Demo mode: no email is sent and any password works. Use code <b>123456</b>. Production uses managed authentication.</p>;
+
+  /* — set a new password (reached from a reset code or link) — */
+  if (mode === 'reset') {
     return (
-      <form className="page" style={{ maxWidth: 420, margin: '0 auto' }} noValidate onSubmit={(e) => { e.preventDefault(); if (!/^\S+@\S+\.\S+$/.test(email)) { setErr('That email doesn’t look right. Try name@example.com.'); return; } send(); }}>
-        <div><h1>Welcome to VendGrid</h1><p className="muted" style={{ margin: '4px 0 0' }}>Browse freely. Sign in when you’re ready to save, message or post.</p></div>
-        {authFail && !linkErr && !err && <div className="alert" role="alert"><span>That link couldn’t sign you in here. Links only work in the browser where you asked for them, and only once. Enter your email to get a new one, then open it in this browser.</span></div>}
-        {linkErr && !err && <div className="alert" role="alert"><span>{/expired|invalid/i.test(linkErr) ? 'That sign-in link expired or was already used. Enter your email for a new one.' : linkErr.replace(/\+/g, ' ')}</span></div>}
-        <Field id="em" label="Email" error={err}><input id="em" className={'input full' + (err ? ' bad' : '')} type="email" autoComplete="email" inputMode="email" autoFocus value={email} onChange={(e) => { setEmail(e.target.value); setErr(''); }} /></Field>
-        {emailTypo(email) && <p className="muted" style={{ margin: 0 }} role="status">Did you mean <button type="button" className="linkbtn" onClick={() => { setEmail(emailTypo(email)); setErr(''); }}>{emailTypo(email)}</button>?</p>}
-        <button className="btn block" disabled={busy}>{busy ? 'Sending…' : 'Email me a sign-in link'}</button>
-        <p className="muted iconline" style={{ fontSize: 12 }}><Icon n="lock" size={14} />No password needed. The link signs you in on this device.</p>
-        <p className="muted" style={{ margin: 0, fontSize: 12 }}>By continuing you confirm you’re 18 or older and agree to the <a className="u" href="#/legal?doc=terms">Terms</a> and <a className="u" href="#/legal?doc=privacy">Privacy policy</a>.</p>
-      </form>
+      <AuthShell>
+        {!user ? (
+          <div className="page authcard">
+            <h1>This reset link has expired</h1>
+            <p className="muted" style={{ margin: 0 }}>Reset links work once and expire after an hour. Ask for a new one.</p>
+            <a className="btn" href="#/login?forgot=1">Reset my password</a>
+          </div>
+        ) : (
+          <form className="page authcard" noValidate onSubmit={submitReset}>
+            <div><h1>Choose a new password</h1><p className="muted" style={{ margin: '4px 0 0' }}>For {user.email}</p></div>
+            {alerts}
+            <PasswordField id="np" label="New password" value={pw} onChange={(v) => { setPw(v); setE('pw', ''); }} error={err.pw} autoComplete="new-password" rules email={user.email} autoFocus />
+            <PasswordField id="np2" label="Confirm new password" value={pw2} onChange={(v) => { setPw2(v); setE('pw2', ''); }} error={err.pw2} autoComplete="new-password" />
+            <button className="btn block" disabled={busy === 'pw'}>{busy === 'pw' ? 'Saving…' : 'Update password'}</button>
+            <p className="muted iconline" style={{ fontSize: 12 }}><Icon n="lock" size={14} />You’ll stay signed in on this device.</p>
+          </form>
+        )}
+      </AuthShell>
     );
   }
+
+  if (user && view !== 'code') {
+    return <AuthShell><div className="page authcard"><h1>You’re signed in</h1><p className="muted" style={{ margin: 0 }}>{user.email}</p><a className="btn" href={next}>Continue</a></div></AuthShell>;
+  }
+
+  /* — the emailed code — */
+  if (view === 'code') {
+    return (
+      <AuthShell>
+        <form className="page authcard" noValidate onSubmit={(e) => { e.preventDefault(); verify(code); }}>
+          <span className="caticon" style={{ background: 'var(--gray-100)' }}><Icon n="send" size={24} /></span>
+          <div>
+            <h1>Check your email</h1>
+            <p style={{ margin: '4px 0 0' }}>We sent a 6-digit code to <b style={{ overflowWrap: 'anywhere' }}>{em}</b>. Enter it here, or tap the link in the email on this device.</p>
+          </div>
+          {alerts}
+          <Field id="code" label="6-digit code">
+            <input id="code" className={'input full codeinput' + (err.form ? ' bad' : '')} inputMode="numeric" pattern="[0-9]*" autoComplete="one-time-code" enterKeyHint="go" maxLength={6} autoFocus aria-describedby="code-help" value={code} onChange={(e) => { const v = e.target.value.replace(/\D/g, '').slice(0, 6); setCode(v); setErr({}); if (v.length === 6) verify(v); }} />
+          </Field>
+          <button className="btn block" disabled={busy === 'verify' || code.length !== 6}>{busy === 'verify' ? 'Checking…' : kind === 'recovery' ? 'Continue' : 'Verify and sign in'}</button>
+          <p id="code-help" className="muted" style={{ margin: 0, fontSize: 13 }}>It can take a minute. Check spam too. The code and link work once and expire in an hour.</p>
+          {demoNote}
+          {mailApp && <a className="btn secondary" href={mailApp[1]} target="_blank" rel="noopener noreferrer"><Icon n="ext" size={16} />Open {mailApp[0]}</a>}
+          <div className="row2" style={{ flexWrap: 'wrap' }}>
+            <button type="button" className="btn secondary" disabled={wait > 0 || busy === 'code'} onClick={resend}>{busy === 'code' ? 'Sending…' : wait > 0 ? `Send again in ${wait}s` : 'Send a new code'}</button>
+            <button type="button" className="btn ghost" onClick={() => { setView('form'); setErr({}); }}>Use a different email</button>
+          </div>
+        </form>
+      </AuthShell>
+    );
+  }
+
+  /* — forgot password — */
+  if (view === 'forgot') {
+    return (
+      <AuthShell>
+        <form className="page authcard" noValidate onSubmit={submitForgot}>
+          <div><h1>Reset your password</h1><p className="muted" style={{ margin: '4px 0 0' }}>Enter your email and we’ll send a code and a link to choose a new password.</p></div>
+          {alerts}
+          <Field id="em" label="Email" error={err.email}><input id="em" className={'input full' + (err.email ? ' bad' : '')} type="email" autoComplete="username" autoCapitalize="none" inputMode="email" autoFocus value={email} onChange={(e) => { setEmail(e.target.value); setE('email', ''); }} /></Field>
+          <button className="btn block" disabled={busy === 'code'}>{busy === 'code' ? 'Sending…' : 'Send reset code'}</button>
+          <button type="button" className="btn ghost" onClick={() => { setView('form'); setErr({}); }}>Back to sign in</button>
+        </form>
+      </AuthShell>
+    );
+  }
+
+  /* — sign in / create account — */
+  const signup = mode === 'signup';
+  const nextQ = route.next && route.next !== '#/' ? '?next=' + enc(route.next) : '';
+  const hasGoogle = live ? !!(authCfg && authCfg.google) : true;
+  const hasPassword = live ? !authCfg || authCfg.password !== false : true;
+  const canSignup = live ? !authCfg || authCfg.signup !== false : true;
   return (
-    <form className="page" style={{ maxWidth: 420, margin: '0 auto' }} noValidate onSubmit={(e) => { e.preventDefault(); if (!/^\S+@\S+\.\S+$/.test(email)) { setErr('That email doesn’t look right. Try name@example.com.'); return; } const nx = signIn(email); go(nx || route.next || '#/', true); }}>
-      <div><h1>Welcome to VendGrid</h1><p className="muted" style={{ margin: '4px 0 0' }}>Browse freely. Sign in when you’re ready to save, message or post.</p></div>
-      <Field id="em" label="Email" error={err}><input id="em" className={'input full' + (err ? ' bad' : '')} type="email" autoComplete="email" value={email} onChange={(e) => { setEmail(e.target.value); setErr(''); }} /></Field>
-      <button className="btn block">Continue</button>
-      <p className="muted" style={{ margin: 0, fontSize: 12 }}>Demo sign-in: no password or email is sent. Production uses managed authentication.</p>
-      <p className="muted" style={{ margin: 0, fontSize: 12 }}>By continuing you confirm you’re 18 or older and agree to the <a className="u" href="#/legal?doc=terms">Terms</a> and <a className="u" href="#/legal?doc=privacy">Privacy policy</a>.</p>
-    </form>
+    <AuthShell>
+      <form className="page authcard" noValidate onSubmit={signup ? submitSignup : submitSignin}>
+        <nav className="authtabs" aria-label="Account">
+          <a href={'#/login' + nextQ} aria-current={signup ? undefined : 'page'}>Sign in</a>
+          {canSignup && <a href={'#/signup' + nextQ} aria-current={signup ? 'page' : undefined}>Create account</a>}
+        </nav>
+        <div><h1>{signup ? 'Create your account' : 'Welcome back'}</h1><p className="muted" style={{ margin: '4px 0 0' }}>{signup ? 'Free to join. Post, save and message in minutes.' : 'Browse freely. Sign in when you’re ready to save, message or post.'}</p></div>
+        {alerts}
+        {hasGoogle && <><button type="button" className="btn secondary block gbtn" disabled={busy === 'g'} onClick={google}><GoogleMark />{busy === 'g' ? 'Opening Google…' : 'Continue with Google'}</button><div className="orline" role="separator"><span>or use email</span></div></>}
+        {signup && <Field id="nm" label="Your name" error={err.name}><input id="nm" className={'input full' + (err.name ? ' bad' : '')} autoComplete="name" maxLength={80} value={name} onChange={(e) => { setName(e.target.value); setE('name', ''); }} /></Field>}
+        <Field id="em" label="Email" error={err.email}><input id="em" className={'input full' + (err.email ? ' bad' : '')} type="email" autoComplete="username" autoCapitalize="none" autoCorrect="off" inputMode="email" autoFocus={!signup} aria-invalid={!!err.email} aria-describedby={err.email ? 'em-e' : undefined} value={email} onChange={(e) => { setEmail(e.target.value); setE('email', ''); }} /></Field>
+        {emailTypo(email) && <p className="muted" style={{ margin: 0 }} role="status">Did you mean <button type="button" className="linkbtn" onClick={() => { setEmail(emailTypo(email)); setE('email', ''); }}>{emailTypo(email)}</button>?</p>}
+        {hasPassword && <PasswordField id="pw" label="Password" value={pw} onChange={(v) => { setPw(v); setE('pw', ''); }} error={err.pw} autoComplete={signup ? 'new-password' : 'current-password'} rules={signup} email={em} />}
+        {!signup && hasPassword && <button type="button" className="linkbtn authforgot" onClick={() => { setView('forgot'); setErr({}); }}>Forgot your password?</button>}
+        {signup && <div className="stack" style={{ gap: 4 }}><label className="checkrow"><input type="checkbox" checked={agree} onChange={(e) => { setAgree(e.target.checked); setE('agree', ''); }} aria-invalid={!!err.agree} /><span>I’m 18 or older and agree to the <a className="u" href="#/legal?doc=terms">Terms</a> and <a className="u" href="#/legal?doc=privacy">Privacy policy</a>.</span></label>{err.agree && <div className="err" role="alert" style={{ fontSize: 12, color: 'var(--red)' }}>{err.agree}</div>}</div>}
+        {hasPassword ? <button className="btn block" disabled={busy === 'pw'}>{busy === 'pw' ? (signup ? 'Creating account…' : 'Signing in…') : signup ? 'Create account' : 'Sign in'}</button> : <button type="button" className="btn block" disabled={busy === 'code'} onClick={() => emailMe('email')}>{busy === 'code' ? 'Sending…' : 'Email me a sign-in code'}</button>}
+        {hasPassword && <button type="button" className="btn secondary block" disabled={busy === 'code'} onClick={() => { if (signup && !agree) { setE('agree', 'Please confirm to continue.'); return; } emailMe('email'); }}>{busy === 'code' ? 'Sending…' : signup ? 'Skip the password: email me a code' : 'Email me a sign-in code instead'}</button>}
+        {demoNote}
+        {!signup && legal}
+      </form>
+    </AuthShell>
   );
 }
 
@@ -2082,6 +2283,8 @@ export default function App() {
   const [hash, setHash] = useState(bootAddr);
   const [listings, setListings] = usePersist('listings', SEED);
   const [user, setUser] = usePersist('user', null);
+  useEffect(() => { const f = (e) => { if (e.key === 'vg:user') setUser(store.get('user') ?? null); }; window.addEventListener('storage', f); return () => window.removeEventListener('storage', f); }, []);
+  const [authCfg, setAuthCfg] = useState(null); // which sign-in methods the project allows
   const [mapFull, setMapFull] = useState(false); // desktop map only: hides the side menu for a full-width map; never remembered, and ends when you leave the map
   const [favs, setFavs] = usePersist('favs', () => new Set(), (x) => [...x], (a) => new Set(a));
   const [searches, setSearches] = usePersist('searches', []);
@@ -2184,7 +2387,7 @@ export default function App() {
   const refreshConvs = async (uid, c) => { try { setLiveConvs(await api.loadConversations(uid, c ? c.orgs : liveOrgs, c ? c.listings : liveListings)); } catch (e) { /* keep last good copy */ } };
   const loadStaff = () => { api.loadReports().then(setLiveReports).catch(() => {}); api.loadVerifQueue().then(setLiveVerifQueue).catch(() => {}); api.loadSupport().then(setLiveTickets).catch(() => {}); };
   const onSession = async (session) => {
-    const u = session && session.user ? { id: session.user.id, email: session.user.email, name: (session.user.email || '').split('@')[0] } : null;
+    const u = session && session.user ? { id: session.user.id, email: session.user.email, name: ((session.user.user_metadata || {}).full_name || (session.user.user_metadata || {}).name || '').trim() || (session.user.email || '').split('@')[0], providers: (session.user.app_metadata && session.user.app_metadata.providers) || ['email'] } : null;
     setLiveUser(u); liveUserRef.current = u;
     const c = await refreshCatalog(u && u.id).catch(() => null);
     if (!u) { setLiveFavs(new Set()); setLiveSearches([]); setLiveConvs([]); setProfile(null); setLiveVerif(null); setLiveVerifQueue([]); setLiveTickets([]); setLiveReports([]); setLiveNotes([]); setLiveStats({}); return; }
@@ -2198,7 +2401,7 @@ export default function App() {
     if (p && p.type === 'save') { setLiveFavs((f) => new Set(f).add(p.id)); api.addFav(u.id, p.id).catch(liveErr); }
     if (p && p.type === 'saveSearch') saveSearch(p.query, true);
     const top = stack.current[stack.current.length - 1] || '#/';
-    if (p && p.type === 'go') go(p.href, true); else if (top.startsWith('#/login')) go(back || '#/', true); else if (back && top === '#/' && stored) go(back, true);
+    if (p && p.type === 'go') go(p.href, true); else if (/^#\/(login|signup)/.test(top)) go(back || '#/', true); else if (back && top === '#/' && stored) go(back, true);
     if (hadCode.current) { hadCode.current = false; notify(`Signed in as ${u.email}`); }
   };
   useEffect(() => {
@@ -2214,8 +2417,13 @@ export default function App() {
         await onSession(data.session);
         try { const u = new URL(location.href); if (u.searchParams.has('code')) { u.searchParams.delete('code'); history.replaceState(null, '', u.pathname + u.search + u.hash); } } catch (e) { /* ignore */ }
         setMode('live');
+        api.loadAuthSettings().then(setAuthCfg).catch(() => {});
         off = api.sb().auth.onAuthStateChange((ev, session) => {
-          if (ev === 'SIGNED_OUT' && liveUserRef.current && !userOut.current) notify('You were signed out. Sign in again to continue.');
+          if (ev === 'PASSWORD_RECOVERY') go('#/reset-password', true);
+          if (ev === 'SIGNED_OUT' && liveUserRef.current && !userOut.current) {
+            const here = stack.current[stack.current.length - 1] || '#/';
+            if (/^#\/(saved|messages|my-listings|settings|billing|post|activity|business-settings|admin)/.test(here)) { keepPending(null, here); go(`#/login?reason=expired&next=${enc(here)}`, true); } else notify('You were signed out. Sign in again to continue.');
+          }
           if (ev === 'SIGNED_OUT') userOut.current = false;
           if (ev === 'SIGNED_IN' || ev === 'SIGNED_OUT') onSession(session);
         }).data.subscription;
@@ -2236,13 +2444,34 @@ export default function App() {
     keepPending(action, here);
     goFn(`#/login?next=${enc(here)}`, !!silent);
   };
-  const sendMagicLink = async (email, next) => {
-    if (!pending.current && safeNext(next)) keepPending(null, next);
-    const { error } = await api.sb().auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
-    if (error) throw error;
+  // Sign-in methods. Live mode talks to Supabase and returns nothing (the session listener finishes the sign-in);
+  // demo mode signs in locally and returns where to go next.
+  const rememberNext = (next) => { if (!pending.current && safeNext(next)) keepPending(null, next); };
+  const sendCode = async (email, name, next) => { rememberNext(next); if (live) await api.sendEmailCode(email, name); };
+  const verifyCode = async (email, token, kind, next) => {
+    if (!live) { if (token !== '123456') throw new Error('invalid code'); return signIn(email) || ''; }
+    rememberNext(next);
+    const t = kind === 'recovery' ? 'recovery' : kind;
+    try { await api.verifyEmailCode(email, token, t); } catch (e) { if (kind === 'recovery') throw e; await api.verifyEmailCode(email, token, t === 'email' ? 'signup' : 'email'); }
   };
-  const signIn = (email) => {
-    const u = { email, name: email.split('@')[0] };
+  const passwordSignIn = async (email, pw, next) => { if (!live) return signIn(email) || ''; rememberNext(next); await api.passwordSignIn(email, pw); };
+  const passwordSignUp = async (email, pw, name, next) => {
+    if (!live) return { to: signIn(email, name) || '' };
+    rememberNext(next);
+    const d = await api.passwordSignUp(email, pw, name);
+    return d && d.session ? undefined : { needsCode: true };
+  };
+  const sendReset = async (email) => { if (live) await api.sendPasswordReset(email); };
+  const setPassword = async (pw) => { if (live) await api.setNewPassword(pw); };
+  const googleSignIn = async (next) => { if (!live) return signIn('you@gmail.com', 'Demo User') || ''; rememberNext(next); await api.googleSignIn(); };
+  const signOutOthers = async () => { if (live) await api.signOutOthers(); };
+  const saveName = async (name) => {
+    const n = name.trim().slice(0, 80);
+    if (live) { await api.saveDisplayName(liveUser.id, n); const u = { ...liveUser, name: n }; setLiveUser(u); liveUserRef.current = u; return; }
+    setUser((u) => ({ ...u, name: n }));
+  };
+  const signIn = (email, name) => {
+    const u = { email, name: (name || '').trim() || email.split('@')[0] };
     setUser(u);
     // seed one inbound inquiry so owner flows are testable
     setConvs((c) => c.length ? c : [{ id: 'c-seed', listingId: 104, me: 'owner', other: 'Hoosier Vend Supply', status: 'open', unread: 1, blocked: false, msgs: [{ from: 'them', at: Date.now() - 3 * 36e5, text: 'Is the Vendo 721 still available? Could you do $550 if I pick it up this week?' }] }]);
@@ -2440,7 +2669,7 @@ export default function App() {
     const h = (e) => { const el = e.target.closest && e.target.closest('a[href^="#/"]'); if (!el || e.defaultPrevented || e.metaKey || e.ctrlKey || e.button) return; e.preventDefault(); go(el.getAttribute('href')); };
     document.addEventListener('click', h); return () => document.removeEventListener('click', h);
   }, [go]);
-  const ctx = { mapFull, setMapFull, authFail, themeSel, seeSearch, listings: allListings, priv, metrics, impr, tickets: live ? liveTickets : tickets, track, trackImpr, addTicket, isPro, isAdmin, plan, stats: liveStats, promos: promosView, changeEmail, signOutAll, exportData, deleteData, notes, noteCount, markNotesRead, verif: verifView, verifQueue, openVerifDoc, myOrg, saveOrg, room, closeTicket, reports: live ? liveReports : reports, events, invoices, audit, views, subscribe, cancelPlan, promote, cancelPromo, confirmPayment, processEvent, submitVerif, decideVerif, decideReport, bumpView, orgs, user: curUser, favs: curFavs, searches: curSearches, convs: curConvs, live, mode, sendMagicLink, drafts, prefLoc, setPrefLoc, theme, setTheme, unread, notify, requireAuth, signIn, signOut, toggleFav, saveSearch, removeSearch, searchFromText, startInquiry, sendMsg, markRead, setConvStatus, blockConv, report, setStatus, publish, setDraft };
+  const ctx = { authCfg, sendCode, verifyCode, passwordSignIn, passwordSignUp, sendReset, setPassword, googleSignIn, signOutOthers, saveName, mapFull, setMapFull, authFail, themeSel, seeSearch, listings: allListings, priv, metrics, impr, tickets: live ? liveTickets : tickets, track, trackImpr, addTicket, isPro, isAdmin, plan, stats: liveStats, promos: promosView, changeEmail, signOutAll, exportData, deleteData, notes, noteCount, markNotesRead, verif: verifView, verifQueue, openVerifDoc, myOrg, saveOrg, room, closeTicket, reports: live ? liveReports : reports, events, invoices, audit, views, subscribe, cancelPlan, promote, cancelPromo, confirmPayment, processEvent, submitVerif, decideVerif, decideReport, bumpView, orgs, user: curUser, favs: curFavs, searches: curSearches, convs: curConvs, live, mode, drafts, prefLoc, setPrefLoc, theme, setTheme, unread, notify, requireAuth, signIn, signOut, toggleFav, saveSearch, removeSearch, searchFromText, startInquiry, sendMsg, markRead, setConvStatus, blockConv, report, setStatus, publish, setDraft };
 
   let view;
   switch (route.name) {
