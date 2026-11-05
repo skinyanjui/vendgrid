@@ -2196,17 +2196,35 @@ function PasswordField({ id, label, value, onChange, error, hint, autoComplete, 
 const AuthBrand = () => <a className="authbrand" href="#/" aria-label="VendGrid home"><BrandMark /><span>VendGrid</span></a>;
 function AuthShell({ children }) {
   // The left side never changes with the form: same content, same place, whatever the visitor taps on the right.
+  const { listings, orgs } = useApp();
+  const pub = listings.filter((l) => l.status === 'published');
+  const shots = pub.filter((l) => l.type === 'machines' && l.photos[0]).slice(0, 3);
+  const nVerified = new Set(pub.map((l) => l.org).filter((o) => orgs[o] && orgs[o].verified)).size;
+  const nCities = new Set(pub.map((l) => `${l.geo.city},${l.geo.st}`)).size;
+  const stats = [[pub.length, 'live listings'], [nVerified, 'verified businesses'], [nCities, 'cities']];
   return (
     <div className="authgrid authpage">
-      <aside className="authaside" aria-label="About your account">
+      <aside className="authaside" aria-label="About VendGrid">
         <AuthBrand />
         <div className="authpitch">
-          <h2>One account for buying, selling and talking</h2>
+          <p className="authkick">The vending marketplace</p>
+          <h2>Find the machine, the location or the route. Skip the guesswork.</h2>
+          <p className="authsub">Buy and sell machines and parts, find places to put them, take over routes and hire local help, all in one search.</p>
+          {shots.length > 0 && (
+            <div className="authshots" aria-hidden="true">
+              {shots.map((l, i) => (
+                <figure key={l.id} className={'ashot s' + i}>
+                  <img src={l.photos[0]} alt="" loading="lazy" />
+                  <figcaption><b>{priceText(l)}</b><span>{l.geo.city}, {l.geo.st}</span></figcaption>
+                </figure>
+              ))}
+            </div>
+          )}
+          <dl className="authstats">{stats.map(([n, l]) => <div key={l}><dt>{n}</dt><dd>{l}</dd></div>)}</dl>
           <ul>
-            <li><Icon n="heart" size={18} /><span><b>Save</b> listings and searches, and get back to them on any device.</span></li>
-            <li><Icon n="send" size={18} /><span><b>Message</b> sellers. Every conversation stays tied to the listing it is about.</span></li>
-            <li><Icon n="box" size={18} /><span><b>Post</b> machines, parts, locations, routes and services for free.</span></li>
             <li><Icon n="check" size={18} /><span><b>Verified</b> is earned by review, never bought.</span></li>
+            <li><Icon n="send" size={18} /><span><b>Every message</b> stays tied to the listing it is about.</span></li>
+            <li><Icon n="box" size={18} /><span><b>Free to post</b> machines, parts, locations, routes and services.</span></li>
           </ul>
         </div>
         <nav className="authlegal" aria-label="Legal"><a href="#/legal?doc=terms">Terms</a><a href="#/legal?doc=privacy">Privacy</a><a href="#/safety">Safety</a></nav>
