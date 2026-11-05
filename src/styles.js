@@ -656,4 +656,8 @@ label.btn.disabled{opacity:.6;pointer-events:none}
 
 .bar .savebtn{white-space:nowrap}
 @media(max-width:560px){.bar{flex-wrap:wrap}}
+.mapcities{overflow-x:auto;scrollbar-width:thin;padding-bottom:2px}
+.mapcities .seg.wrap{flex-wrap:nowrap;gap:6px;width:max-content;min-width:100%}
+.mapcities .seg.wrap [role=radio]{min-height:32px;padding:0 11px;font-size:13px;white-space:nowrap;flex:none}
+@media(pointer:coarse){.mapcities .seg.wrap [role=radio]{min-height:44px}}
 `;

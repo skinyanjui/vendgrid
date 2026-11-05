@@ -253,7 +253,7 @@ function ResultsMap({ items, showType }) {
             </g>); })}
         </svg>} />
       </div>
-      <Seg label="City" size="wrap" options={groups.map((g) => [g.key, `${g.city} · ${g.items.length}`])} value={cur.key} onChange={setSel} />
+      <div className="mapcities"><Seg label="City" size="wrap" options={groups.map((g) => [g.key, `${g.city} · ${g.items.length}`])} value={cur.key} onChange={setSel} /></div>
       <p className="muted iconline" style={{ fontSize: 12 }}><Icon n="pin" size={13} />Pins sit at the city centre. Exact addresses are never shown.</p>
       <div className="grid">{cur.items.map((l) => <ListingCard key={l.id} l={l} showType={showType} />)}</div>
     </div>
