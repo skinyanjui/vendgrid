@@ -1482,7 +1482,7 @@ function Mine({ go }) {
         return (
           <div className="item" key={l.id} style={{ cursor: 'default', flexWrap: 'wrap' }}>
             <div className="t" style={{ minWidth: 200 }}><a href={hrefFor(l)}><b><u>{l.title}</u></b></a><span className="muted">{TYPES[l.type].label} · {priceText(l)} · {l.geo.city}, {l.geo.st}{isPro ? ` · ${vw(l)} views${live ? ` · ${sv(l)} saves` : ''} · ${inq(l)} inquiries` : ''}</span></div>
-            <span className={'badge' + (l.status === 'published' ? ' ok' : l.status === 'sold' || l.status === 'filled' ? '' : ' warn')}>{STATUS_LABEL[l.status]}</span>
+            <span className={'badge' + (l.status === 'published' ? ' ok' : l.status === 'sold' || l.status === 'filled' ? ' info' : ' warn')}>{STATUS_LABEL[l.status]}</span>
             {promo && <span className="badge sp">{promo.status === 'active' ? 'Sponsored' : promo.status === 'suspended' ? 'Sponsorship paused' : 'Sponsorship pending payment'}</span>}
             {(['published', 'paused'].includes(l.status) || next.length > 0) && <div className="ractions">
             {['published', 'paused'].includes(l.status) && <a className="btn secondary sm" href={`#/post?edit=${l.id}`}>Edit</a>}

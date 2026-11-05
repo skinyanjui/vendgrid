@@ -10,18 +10,21 @@ export const CSS = `
   --ease:cubic-bezier(.4,0,.2,1);--fast:100ms;--base:150ms;--slow:250ms;
   --font-sans:"Geist",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
   --header-h:56px;
+  --on-blue:#fff;--on-red:#fff;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --background:#0a0a0a;--background-subtle:#141414;--foreground:#f5f5f5;
   --gray-100:#1c1c1c;--gray-200:#242424;--gray-300:#3a3a3a;--gray-400:#555;--gray-500:#9a9a9a;
   --gray-700:#c8c8c8;--gray-800:#dedede;--gray-1000:#f5f5f5;
   --blue:#5aa2ff;--red:#ff7a7f;--green:#5fd07a;--amber:#f2b94b;
+  --on-blue:#0a0a0a;--on-red:#0a0a0a;
   --text-muted:#c8c8c8;--shadow-md:0 4px 12px rgba(0,0,0,.6);--shadow-lg:0 12px 32px rgba(0,0,0,.8);;color-scheme:dark}}
 :root[data-theme="dark"]{
   --background:#0a0a0a;--background-subtle:#141414;--foreground:#f5f5f5;
   --gray-100:#1c1c1c;--gray-200:#242424;--gray-300:#3a3a3a;--gray-400:#555;--gray-500:#9a9a9a;
   --gray-700:#c8c8c8;--gray-800:#dedede;--gray-1000:#f5f5f5;
   --blue:#5aa2ff;--red:#ff7a7f;--green:#5fd07a;--amber:#f2b94b;
+  --on-blue:#0a0a0a;--on-red:#0a0a0a;
   --text-muted:#c8c8c8;--shadow-md:0 4px 12px rgba(0,0,0,.6);--shadow-lg:0 12px 32px rgba(0,0,0,.8);;color-scheme:dark}
 *{box-sizing:border-box}
 html,body{margin:0}
@@ -118,13 +121,14 @@ button.chip:hover{background:var(--gray-200)}
   .menubtn{display:none}
   .hdr-right{display:flex}
   .layout{display:grid;grid-template-columns:200px minmax(0,1fr)}
-  .sidebar{display:flex;flex-direction:column;gap:2px;padding:16px 12px;border-right:1px solid var(--border);position:sticky;top:var(--header-h);align-self:start;height:calc(100vh - var(--header-h))}
+  .sidebar{display:flex;flex-direction:column;gap:2px;padding:16px 12px;border-right:1px solid var(--border);position:sticky;top:var(--header-h);align-self:start;height:calc(100vh - var(--header-h));height:calc(100dvh - var(--header-h));overflow-y:auto;overscroll-behavior:contain}
   .sidebar a{display:flex;align-items:center;gap:12px;height:40px;padding:0 12px;border-radius:var(--radius-md);color:var(--gray-800);font-weight:500}
   .sidebar a:hover{background:var(--gray-100)}
   .sidebar a[aria-current=page]{background:var(--foreground);color:var(--background)}
   .sidebar .note{margin-top:auto;font-size:12px;line-height:16px;color:var(--text-muted);padding:12px}
   .main{padding:16px 32px 64px}
-  .hdr{--header-h:64px}
+  :root{--header-h:64px}
+  .hdr{height:var(--header-h)}
 }
 .count{margin-left:auto;background:var(--foreground);color:var(--background);border-radius:9999px;min-width:20px;height:20px;font-size:12px;display:inline-flex;align-items:center;justify-content:center;padding:0 6px}
 .sidebar [aria-current=page] .count{background:var(--background);color:var(--foreground)}
@@ -660,4 +664,22 @@ label.btn.disabled{opacity:.6;pointer-events:none}
 .mapcities .seg.wrap{flex-wrap:nowrap;gap:6px;width:max-content;min-width:100%}
 .mapcities .seg.wrap [role=radio]{min-height:32px;padding:0 11px;font-size:13px;white-space:nowrap;flex:none}
 @media(pointer:coarse){.mapcities .seg.wrap [role=radio]{min-height:44px}}
+
+/* ---- Color system: color always pairs with a label or icon, never carries meaning alone ----
+   blue = action, selection and unread · green = verified, live and success · amber = Sponsored and needs attention
+   red = destructive and errors. Everything else stays neutral. */
+.btn:not(.secondary):not(.ghost):not(.danger){background:var(--blue);color:var(--on-blue)}
+.btn:not(.secondary):not(.ghost):not(.danger):hover{background:var(--blue);filter:brightness(.92)}
+.btn.danger{color:var(--on-red)}
+.chip.on{background:var(--blue);color:var(--on-blue);border-color:var(--blue)}
+.badge.ok{background:color-mix(in srgb,var(--green) 12%,var(--background))}
+.badge.warn{background:color-mix(in srgb,var(--amber) 14%,var(--background))}
+.badge.bad{background:color-mix(in srgb,var(--red) 12%,var(--background))}
+.badge.info{color:var(--blue);border-color:var(--blue);background:color-mix(in srgb,var(--blue) 10%,var(--background))}
+.badge.sp,.thumb .badge.sp.onphoto{color:var(--amber);border-color:var(--amber);background:color-mix(in srgb,var(--amber) 14%,var(--background))}
+.vtoggle.on{background:color-mix(in srgb,var(--green) 14%,var(--background));border-color:var(--green);color:var(--green)}
+.sidebar a[aria-current=page]{background:color-mix(in srgb,var(--blue) 12%,var(--background));color:var(--blue)}
+.count,.sidebar [aria-current=page] .count{background:var(--blue);color:var(--on-blue)}
+.tabbar a[aria-current=page]{color:var(--blue)}
+.ndot{background:var(--blue)}
 `;
