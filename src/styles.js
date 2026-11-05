@@ -646,4 +646,6 @@ label.btn.disabled{opacity:.6;pointer-events:none}
 .dangerbtn{background:var(--red);color:#fff;border-color:var(--red)}
 .dangerbtn:disabled{opacity:.45}
 
+@media (pointer:coarse){.seg [role=radio],.seg.wrap [role=radio]{min-height:44px}}
+
 `;
