@@ -575,7 +575,7 @@ function ListingCard({ l, showType }) {
       </div>
       <div className="cbody">
         <div className="cprow"><div className={'cprice' + (/^(\$|From|Call-out|Install)/.test(priceText(l)) ? '' : ' txt')}>{priceText(l)}</div>{sig ? (sig.kind === 'drop' ? <span className="badge ok" title={`Was ${FMT(sig.from)}`}>Price drop</span> : <span className="badge ok" title={`${sig.pct}% below the median of ${sig.n} similar listings`}>Below similar</span>) : isNew && <span className="badge info">New</span>}</div>
-        <a className="ctitle" href={hrefFor(l)}>{l.title}</a>
+        <a className="ctitle" href={hrefFor(l)} title={l.title}>{l.title}</a>
         <div className="cspec" title={spec}>{spec || '\u00a0'}</div>
         <div className="cloc"><Icon n="pin" size={13} /><span>{l.geo.city}, {l.geo.st}</span></div>
         {canAct && <a className="cact" href={`#/listing/${l.id}/inquire`} aria-label={`${t.action}: ${l.title}`}>{t.action}</a>}

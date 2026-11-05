@@ -853,4 +853,9 @@ a.u{text-decoration:underline;text-underline-offset:2px}
 .cact:hover{color:var(--on-blue);background:var(--blue);border-color:var(--blue)}
 .cact:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 
+/* one-line title keeps cards short; the full title is in the tooltip and on the detail page */
+.ctitle{-webkit-line-clamp:1;min-height:var(--tl);max-height:var(--tl);white-space:nowrap;text-overflow:ellipsis;display:block}
+.card.sponsored{border-color:color-mix(in srgb,var(--amber) 42%,var(--border))}
+.card.sponsored:hover,.card.sponsored:focus-within{border-color:color-mix(in srgb,var(--amber) 70%,var(--border))}
+
 `;
