@@ -596,4 +596,31 @@ kbd{font:inherit;font-size:11px;padding:1px 6px;border:1px solid var(--border);b
 .cities{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
 .cities .chip{flex:none;display:inline-flex;gap:6px;align-items:center}
 .cities .chip .muted{font-size:12px}
+/* policies */
+.policy{display:flex;flex-direction:column;gap:24px;max-width:680px}
+.policy header{display:flex;flex-direction:column;gap:4px}
+.policy header p{margin:0;font-size:13px}
+.policy .lead{margin:0;font-size:17px;line-height:26px}
+.policy section{display:flex;flex-direction:column;gap:8px;scroll-margin-top:calc(var(--header-h) + 16px)}
+.policy h2{font-size:18px;line-height:24px;margin:0}
+.policy section p{margin:0;font-size:15px;line-height:24px}
+.toc{border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 16px;background:var(--background-subtle)}
+.toc ol{margin:0;padding-left:20px;columns:2;column-gap:24px;font-size:14px;line-height:26px}
+.toc a{color:var(--foreground);text-decoration:underline;text-decoration-color:var(--gray-400);text-underline-offset:3px}
+@media (max-width:600px){.toc ol{columns:1}}
+/* document room */
+.docroom{gap:12px}
+.doclist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;border:1px solid var(--border);border-radius:var(--radius-md)}
+.docrow{display:flex;align-items:center;gap:12px;padding:12px;flex-wrap:wrap}
+.docrow + .docrow{border-top:1px solid var(--border)}
+.docrow .t{flex:1 1 200px;min-width:0;display:flex;flex-direction:column;gap:2px}
+.docrow .t b{overflow-wrap:anywhere}
+.docrow .t .muted{font-size:13px}
+.docicon{width:36px;height:36px;border-radius:var(--radius-sm);background:var(--gray-100);display:grid;place-items:center;flex:none;color:var(--gray-700)}
+.ndabox{border:1px solid var(--border);border-radius:var(--radius-md);background:var(--background-subtle);padding:12px 16px;display:flex;flex-direction:column;gap:6px}
+.ndabox ul{margin:0;padding-left:20px;font-size:14px;line-height:22px}
+.checkrow{display:flex;align-items:center;gap:10px;min-height:44px;font-weight:500;cursor:pointer}
+.checkrow input{width:20px;height:20px;accent-color:var(--foreground);flex:none}
+label.btn.disabled{opacity:.6;pointer-events:none}
+
 `;

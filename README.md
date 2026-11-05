@@ -10,6 +10,9 @@ A marketplace for the vending business: buy and sell **machines** and **parts**,
 - Listing pages with a photo gallery, approximate-area map (city only, never a street address), "Parts that fit" and "Move it" (delivery services that cover the listing's city).
 - Three-step posting with live preview; sign-in is only asked for at publish time.
 - Listing-linked messaging with photo attachments and a pay-safely notice.
+- A private **document room** on route listings: the seller uploads P&Ls and agreements, buyers accept confidentiality terms and request access, the seller grants or removes it, and every open is logged for the seller.
+- **Verified business** review: the business submits details and a registration document, staff approve or decline in Admin, and the badge lasts a year.
+- Real **Terms**, **Privacy** and **Refunds** pages (`src/legal.js`), shared by the app and the server-rendered pages.
 - Billing (Professional $49/mo, Sponsored $29/mo), business verification, and an admin area. Payments are **sandbox only** in this build.
 - Apple HIG–style layout: tab bar and pushed headers on phones, icon rail on tablets, sidebar on desktop; light, dark and auto themes.
 
@@ -25,6 +28,10 @@ npm test           # builds, then runs the jsdom flow tests in tests/
 
 Serve `dist/` with any static host. On Vercel, `vercel.json` sets the build command and output directory.
 
+## Search engines
+
+`api/seo.js` is a Vercel function that renders crawlable pages from the live data: `/listing/<id>-<slug>`, category pages (`/vending-machines`, `/vending-routes-for-sale`, …), `/terms`, `/privacy`, `/refunds`, plus `/sitemap.xml` and `/robots.txt`. Each page gets a real title, description, canonical link, Open Graph tags and structured data (Product for priced machines and parts, BreadcrumbList everywhere), with readable content in the HTML. The app then boots on top and opens the same screen. Preview deployments are `noindex`. Sold, filled and expired listings stay reachable but are `noindex`; anything else returns 404. Rewrites live in `vercel.json`.
+
 ## Data
 
 The app talks to Supabase (`src/backend.js`). On start it checks whether the project answers:
@@ -32,20 +39,23 @@ The app talks to Supabase (`src/backend.js`). On start it checks whether the pro
 - **Live mode** (normal on the deployed site): listings and businesses come from the `vg_` tables; sign-in is by emailed magic link; saved listings, saved searches, posting (with photo upload to the `vg-photos` bucket), conversations and messages (photos go to a private bucket and are shown via signed URLs), listing status changes and reports are stored in the database.
 - **Demo mode** (when Supabase can't be reached, e.g. in tests or sandboxed previews): everything runs on the sample data in `src/data.js` and is kept in the visitor's browser.
 
-Admin reports are live for admin accounts. Still demo-only: billing/promotions (no Stripe yet) and business verification review.
+Live for admin accounts: reports, verification review and support requests. Still demo-only: billing/promotions (no Stripe yet) and the admin metrics, billing and audit tabs.
 
 `src/backend.js` holds the project URL and **publishable** key, which are safe in a browser; row-level security protects the data. Never put a `service_role` key in this repo.
 
 ### Supabase setup
 
 - `supabase/migrations/20261105000000_vg_schema.sql` — tables, row-level security, server-side guards and storage buckets (all prefixed `vg_`).
+- `supabase/migrations/20261105010000_vg_private_message_photos.sql` — private bucket for message photos.
+- `supabase/migrations/20261105020000_vg_doc_room_support.sql` — document room, support requests, document storage rules.
 - `supabase/seed.sql` — the 35 demo listings and 10 sample businesses.
 - In **Authentication → URL Configuration**, add the deployed site URL (for example `https://<your-app>.vercel.app`) to **Redirect URLs**, otherwise magic links return to the project's default Site URL.
 
 ## Layout
 
 ```
-src/        App.jsx (all screens), data.js (categories, fields, sample data), engine.js (search), styles.js (CSS)
+src/        App.jsx (all screens), data.js (categories, fields, sample data), engine.js (search), legal.js (policies), seo.js (public paths), styles.js (CSS)
+api/        seo.js (server-rendered pages, sitemap, robots)
 public/img/ demo photos
 tests/      jsdom regression tests
 supabase/   schema migration and seed

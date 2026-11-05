@@ -183,3 +183,81 @@ export async function loadReports() {
   return r.data.map((x) => ({ id: x.id, listingId: x.listing_id, reason: x.reason, by: 'member ' + String(x.reporter).slice(0, 8), at: ts(x.created_at), status: x.status }));
 }
 export async function setReport(id, status) { const r = await client.from('vg_reports').update({ status }).eq('id', id); fail(r.error); }
+
+/* ── document room (route sales) ── */
+const safeName = (n) => String(n || 'file').replace(/[^\w.\- ]+/g, '_').slice(-120);
+const docRow = (f) => ({ id: f.id, listingId: f.listing_id, name: f.name, size: f.size, mime: f.mime, path: f.path, at: ts(f.created_at), views: (f.vg_doc_views || []).map((v) => ({ by: v.viewer, at: ts(v.at) })) });
+const accessRow = (a) => ({ listingId: a.listing_id, buyer: a.buyer, email: a.buyer_email || 'Buyer', status: a.status, ndaAt: ts(a.nda_at), note: a.note || '', at: ts(a.created_at), decidedAt: a.decided_at ? ts(a.decided_at) : null });
+
+/** Everything the signed-in person may see about one listing's room. Never throws for a missing room. */
+export async function loadDocRoom(listingId) {
+  const [cnt, files, access] = await Promise.all([
+    client.rpc('vg_doc_count', { p_listing: listingId }),
+    client.from('vg_doc_files').select('*, vg_doc_views(viewer, at)').eq('listing_id', listingId).order('created_at'),
+    client.from('vg_doc_access').select('*').eq('listing_id', listingId).order('created_at', { ascending: false }),
+  ]);
+  return { count: cnt.data || 0, files: (files.data || []).map(docRow), access: (access.data || []).map(accessRow) };
+}
+export async function docCount(listingId) { const r = await client.rpc('vg_doc_count', { p_listing: listingId }); return r.data || 0; }
+export async function uploadDoc(uid, listingId, file) {
+  const path = `${uid}/rooms/${listingId}/${Date.now()}-${safeName(file.name)}`;
+  const up = await client.storage.from('vg-docs').upload(path, file, { contentType: file.type || 'application/octet-stream', upsert: false });
+  fail(up.error);
+  const r = await client.from('vg_doc_files').insert({ listing_id: listingId, path, name: String(file.name).slice(0, 200), size: file.size, mime: file.type || 'application/octet-stream' }).select().single();
+  if (r.error) { await client.storage.from('vg-docs').remove([path]); fail(r.error); }
+  return docRow(r.data);
+}
+export async function removeDoc(f) {
+  const r = await client.from('vg_doc_files').delete().eq('id', f.id); fail(r.error);
+  await client.storage.from('vg-docs').remove([f.path]);
+}
+export async function requestDocs(listingId, note, again) {
+  const r = again
+    ? await client.from('vg_doc_access').update({ status: 'requested', note: note || null }).eq('listing_id', listingId).eq('buyer', (await client.auth.getUser()).data.user.id)
+    : await client.from('vg_doc_access').insert({ listing_id: listingId, note: note || null });
+  fail(r.error);
+}
+export async function decideDocs(listingId, buyer, status) { const r = await client.from('vg_doc_access').update({ status }).eq('listing_id', listingId).eq('buyer', buyer); fail(r.error); }
+/** Log the view, then hand back a five-minute link. */
+export async function openDoc(f) {
+  const v = await client.from('vg_doc_views').insert({ file_id: f.id }); fail(v.error);
+  const s = await client.storage.from('vg-docs').createSignedUrl(f.path, 300); fail(s.error);
+  return s.data.signedUrl;
+}
+
+/* ── business profile and verification ── */
+export async function updateOrg(id, patch) { const r = await client.from('vg_orgs').update(patch).eq('id', id).select().single(); fail(r.error); return rowToOrg(r.data); }
+const verifRow = (v) => ({ orgId: v.org_id, status: v.status, legal: v.legal_name, phone: v.phone, domain: v.domain, docPath: v.doc_path, reason: v.reason || '', expires: v.expires_at ? ts(v.expires_at) : null, at: ts(v.created_at) });
+export async function loadVerification(orgId) {
+  if (!orgId) return null;
+  const r = await client.from('vg_verification').select('*').eq('org_id', orgId).maybeSingle(); fail(r.error);
+  return r.data ? verifRow(r.data) : null;
+}
+export async function submitVerification(user, profile, v, file, again) {
+  const org_id = await ensureOrg(user, profile);
+  let doc_path = null;
+  if (file) {
+    doc_path = `${user.id}/verify/${Date.now()}-${safeName(file.name)}`;
+    const up = await client.storage.from('vg-docs').upload(doc_path, file, { contentType: file.type || 'application/octet-stream' }); fail(up.error);
+  }
+  const row = { org_id, legal_name: v.legal.trim(), phone: v.phone.trim(), domain: v.domain.trim(), doc_path };
+  const r = again ? await client.from('vg_verification').update(row).eq('org_id', org_id).select().single() : await client.from('vg_verification').insert(row).select().single();
+  fail(r.error);
+  return { org_id, verif: verifRow(r.data) };
+}
+export async function loadVerifQueue() {
+  const r = await client.from('vg_verification').select('*').order('created_at', { ascending: false }).limit(200); fail(r.error);
+  return r.data.map(verifRow);
+}
+export async function decideVerification(orgId, ok, reason) {
+  const r = await client.from('vg_verification').update({ status: ok ? 'verified' : 'rejected', reason: ok ? null : (reason || 'Details could not be confirmed.') }).eq('org_id', orgId); fail(r.error);
+}
+export async function signDoc(path, secs = 300) { const s = await client.storage.from('vg-docs').createSignedUrl(path, secs); fail(s.error); return s.data.signedUrl; }
+
+/* ── support requests ── */
+export async function addSupport(t) { const r = await client.from('vg_support').insert({ email: t.email.trim(), topic: t.topic, message: t.message.trim() }); fail(r.error); }
+export async function loadSupport() {
+  const r = await client.from('vg_support').select('*').order('created_at', { ascending: false }).limit(200); fail(r.error);
+  return r.data.map((x) => ({ id: x.id, email: x.email, topic: x.topic, message: x.message, status: x.status, at: ts(x.created_at) }));
+}
+export async function closeSupport(id) { const r = await client.from('vg_support').update({ status: 'closed' }).eq('id', id); fail(r.error); }

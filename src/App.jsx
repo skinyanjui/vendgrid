@@ -1,15 +1,17 @@
 import { createPortal } from 'react-dom';
 import React, { useState, useEffect, useRef, useMemo, useCallback, createContext, useContext } from 'react';
-import { TYPES, TYPE_KEYS, CITIES, dist, ORGS, SEED, PRIVATE_SEED, TRANSITIONS, STATUS_LABEL, FMT, resolveLocation, suggestLocations, hrefFor, slugify, optionsFor } from './data.js';
+import { POLICIES, LEGAL } from './legal.js';
+import { pathToRoute, listingPath } from './seo.js';
+import { TYPES, TYPE_KEYS, CITIES, dist, ORGS, SEED, PRIVATE_SEED, DEMO_ROOMS, TRANSITIONS, STATUS_LABEL, FMT, resolveLocation, suggestLocations, hrefFor, slugify, optionsFor } from './data.js';
 import { PAGE, SORTS, DEFAULT_QUERY, sortOptions, effectiveSort, parseIntent, runSearch, suggest, priceText } from './engine.js';
 import { CSS } from './styles.js';
 import * as api from './backend.js';
 import L from 'leaflet';
 import LEAFLET_CSS from 'leaflet/dist/leaflet.css';
-import { Search, MapPin, Heart, Menu, X, Plus, Check, ArrowLeft, Share2, ChevronRight, ChevronLeft, Flag, SlidersHorizontal, Send, User, Package, Route as RouteIcon, Refrigerator, Wrench, ImagePlus, Trash2, Eye, Info, Building2, Sun, Moon, Monitor, Lock, EyeOff, BarChart3, Circle, Cog, BookOpen, AlertTriangle, Megaphone, Map as MapIcon, LayoutGrid, Paperclip } from 'lucide-react';
+import { Search, MapPin, Heart, Menu, X, Plus, Check, ArrowLeft, Share2, ChevronRight, ChevronLeft, Flag, SlidersHorizontal, Send, User, Package, Route as RouteIcon, Refrigerator, Wrench, ImagePlus, Trash2, Eye, Info, Building2, Sun, Moon, Monitor, Lock, EyeOff, BarChart3, Circle, Cog, BookOpen, AlertTriangle, Megaphone, Map as MapIcon, LayoutGrid, Paperclip, FileText, Clock, ExternalLink } from 'lucide-react';
 
 /* ───────────── icons (Lucide) ───────────── */
-const LI = { search: Search, pin: MapPin, heart: Heart, menu: Menu, x: X, plus: Plus, check: Check, back: ArrowLeft, share: Share2, chev: ChevronRight, left: ChevronLeft, flag: Flag, sliders: SlidersHorizontal, send: Send, user: User, box: Package, route: RouteIcon, machine: Refrigerator, wrench: Wrench, image: ImagePlus, trash: Trash2, eye: Eye, info: Info, building: Building2, sun: Sun, moon: Moon, auto: Monitor, cog: Cog, book: BookOpen, alert: AlertTriangle, megaphone: Megaphone, map: MapIcon, grid: LayoutGrid, clip: Paperclip, lock: Lock, eyeoff: EyeOff, chart: BarChart3, circle: Circle };
+const LI = { search: Search, pin: MapPin, heart: Heart, menu: Menu, x: X, plus: Plus, check: Check, back: ArrowLeft, share: Share2, chev: ChevronRight, left: ChevronLeft, flag: Flag, sliders: SlidersHorizontal, send: Send, user: User, box: Package, route: RouteIcon, machine: Refrigerator, wrench: Wrench, image: ImagePlus, trash: Trash2, eye: Eye, info: Info, building: Building2, sun: Sun, moon: Moon, auto: Monitor, cog: Cog, book: BookOpen, alert: AlertTriangle, megaphone: Megaphone, map: MapIcon, grid: LayoutGrid, clip: Paperclip, lock: Lock, eyeoff: EyeOff, chart: BarChart3, circle: Circle, file: FileText, clock: Clock, ext: ExternalLink };
 const CAT_ICON = { wanted: 'megaphone', machines: 'machine', parts: 'cog', locations: 'building', routes: 'route', services: 'wrench' };
 const Icon = ({ n, size = 20, stroke = 2 }) => { const C = LI[n]; return C ? <C className={'icon i-' + n} size={size} strokeWidth={stroke} aria-hidden="true" style={{ width: size, height: size }} /> : null; };
 
@@ -978,7 +980,7 @@ function Browse({ route, go }) {
 
 /* ───────────── listing detail ───────────── */
 function Detail({ route, go }) {
-  const { listings, orgs, favs, toggleFav, user, requireAuth, notify, report, setStatus, bumpView, track, saveSearch } = useApp();
+  const { listings, orgs, favs, toggleFav, user, requireAuth, notify, report, setStatus, bumpView, track, saveSearch, live } = useApp();
   const l = listings.find((x) => x.id === route.id);
   useEffect(() => { bumpView(route.id); }, [route.id]);
   const [rep, setRep] = useState(false);
@@ -1001,7 +1003,7 @@ function Detail({ route, go }) {
     if (!user) requireAuth({ type: 'go', href: `#/listing/${l.id}/inquire` }, go); else go(`#/listing/${l.id}/inquire`);
   };
   const share = async () => {
-    const url = (location.href || '').split('#')[0] + toAddr(hrefFor(l));
+    const url = live ? location.origin + listingPath(l) : (location.href || '').split('#')[0] + toAddr(hrefFor(l));
     try { await navigator.clipboard.writeText(url); notify('Link copied'); } catch (e) { notify(url); }
   };
   return (
@@ -1036,6 +1038,7 @@ function Detail({ route, go }) {
           {more.length > 0 && <details className="disc"><summary>More specifications</summary><dl className="facts" style={{ margin: 0, border: 0, borderRadius: 0 }}>{more.map(row)}</dl></details>}
           <PriceCheck l={l} listings={listings} />
           <BuyerChecklist l={l} onAsk={own ? null : act} />
+          {l.type === 'routes' && <DocRoom l={l} own={!!own} go={go} />}
           {(l.type === 'locations' || l.type === 'routes' || l.type === 'services') && <AreaMap l={l} />}
           <div className="panel">
             <h3>Seller</h3>
@@ -1082,7 +1085,7 @@ function Detail({ route, go }) {
 
 /* ───────────── inquiry ───────────── */
 function Inquire({ route, go }) {
-  const { listings, orgs, user, requireAuth, startInquiry, convs } = useApp();
+  const { listings, orgs, user, requireAuth, startInquiry, convs, myOrg } = useApp();
   const l = listings.find((x) => x.id === route.id);
   // Prefill what we already know so the buyer only types what's new.
   const [vals, setVals] = useState(() => {
@@ -1091,7 +1094,7 @@ function Inquire({ route, go }) {
     if (lx) TYPES[lx.type].inquiry.fields.forEach((f) => {
       if (f.def) out[f.key] = f.def;
       if (f.prefill === 'city') out[f.key] = `${lx.geo.city}, ${lx.geo.st}`;
-      if (f.prefill === 'org' && orgs.dm) out[f.key] = orgs.dm.name;
+      if (f.prefill === 'org' && myOrg) out[f.key] = myOrg.name;
     });
     return out;
   });
@@ -1408,11 +1411,104 @@ function Mine({ go }) {
   );
 }
 
-const POLICIES = {
-  terms: ['Terms of use', ['VendGrid connects people who buy, sell, host and service vending equipment. It does not hold payment for equipment, offer escrow or guarantee any transaction.', 'Sellers must describe equipment, locations, routes and services accurately. Revenue and traffic numbers are reported by the seller and are not verified by VendGrid.', 'We can remove listings or accounts that mislead others, spam, or break the law.']],
-  privacy: ['Privacy', ['We collect your email, the listings you post and the messages you send. Street addresses and uploaded business documents are private and are never shown on public pages.', 'Messages are visible only to the people in the conversation. You can ask us to delete your account and data through Contact support.']],
-  refunds: ['Refunds and cancellation', ['Posting, saving and messaging are free. Professional ($49/month) and Sponsored listing ($29/month per placement) can be canceled at any time from Billing.', 'A sponsored placement is paused when its listing is sold, filled, paused or withdrawn. Ask Contact support about refunds for a billing period.']],
-};
+/* ───────────── document room (route sales) ───────────── */
+const NDA_TERMS = ['Keep these documents and what they show confidential.', 'Use them only to decide whether to buy this route.', 'Don’t contact the route’s locations or staff without the seller’s permission.', 'Delete your copies if you don’t buy.'];
+const fmtSize = (n) => (n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB');
+const DOC_ACCEPT = 'application/pdf,image/*,.csv,.xlsx,.xls,.docx,.doc,text/plain';
+const ACCESS_LABEL = { requested: 'Waiting for you', granted: 'Has access', declined: 'Declined', revoked: 'Access removed' };
+
+function DocRoom({ l, own, go }) {
+  const { user, requireAuth, room, notify } = useApp();
+  const [st, setSt] = useState({ loading: true, count: 0, files: [], access: [] });
+  const [busy, setBusy] = useState('');
+  const [agree, setAgree] = useState(false);
+  const [note, setNote] = useState('');
+  const [links, setLinks] = useState({});
+  const [err, setErr] = useState('');
+  const uid = user && (user.id || user.email);
+  const reload = useCallback(() => room.load(l.id).then((r) => setSt({ loading: false, ...r })).catch(() => setSt((s) => ({ ...s, loading: false }))), [l.id, uid]);
+  useEffect(() => { reload(); }, [reload]);
+  if (st.loading) return null;
+  const mine = st.access.find((a) => a.buyer === uid);
+  const count = own ? st.files.length : Math.max(st.count, st.files.length);
+  if (!own && !count) return null;
+  const run = async (key, fn) => { setBusy(key); setErr(''); try { await fn(); await reload(); } catch (e) { setErr(String(e.message || e).replace(/^.*?: /, '')); } setBusy(''); };
+  const open = async (f) => {
+    const w = (() => { try { return window.open('', '_blank'); } catch (e) { return null; } })();
+    try {
+      const url = await room.open(f);
+      if (w && url) { w.location.href = url; } else setLinks((x) => ({ ...x, [f.id]: url }));
+      reload();
+    } catch (e) { if (w) w.close(); setErr(String(e.message || e).replace(/^.*?: /, '')); }
+  };
+  const fileRow = (f) => (
+    <li key={f.id} className="docrow">
+      <span className="docicon"><Icon n="file" size={18} /></span>
+      <span className="t"><b>{f.name}</b><span className="muted">{fmtSize(f.size)} · added {fmtDate(f.at)}{own ? ` · ${f.views.length ? `opened ${f.views.length} ${f.views.length === 1 ? 'time' : 'times'}, last ${fmtDate(f.views[f.views.length - 1].at)}` : 'not opened yet'}` : ''}</span></span>
+      {own ? <button className="btn ghost sm" disabled={busy === 'rm' + f.id} aria-label={`Remove ${f.name}`} onClick={() => run('rm' + f.id, () => room.remove(f))}>Remove</button>
+        : links[f.id] ? <a className="btn secondary sm" href={links[f.id]} target="_blank" rel="noopener noreferrer">Open</a>
+        : <button className="btn secondary sm" onClick={() => open(f)} aria-label={`Open ${f.name}`}>Open</button>}
+    </li>
+  );
+  return (
+    <section className="panel docroom" aria-labelledby="dr-h">
+      <div className="row2" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
+        <h2 id="dr-h" className="iconline" style={{ margin: 0 }}><Icon n="lock" size={18} />Document room</h2>
+        <span className="badge">{count} {count === 1 ? 'document' : 'documents'}</span>
+      </div>
+      {own ? (
+        <>
+          <p className="muted" style={{ margin: 0 }}>Share P&amp;Ls, location agreements and tax returns only with buyers you approve. Buyers accept confidentiality terms before they can ask, and you see each time a file is opened.</p>
+          {st.files.length > 0 && <ul className="doclist">{st.files.map(fileRow)}</ul>}
+          <label className={'btn secondary' + (busy === 'up' ? ' disabled' : '')} style={{ alignSelf: 'flex-start' }}>
+            <Icon n="plus" size={16} />{busy === 'up' ? 'Uploading…' : 'Add documents'}
+            <input type="file" multiple accept={DOC_ACCEPT} className="sr" disabled={busy === 'up'} onChange={(e) => { const fs = [...e.target.files]; e.target.value = ''; const big = fs.find((f) => f.size > 20971520); if (big) { setErr(`${big.name} is over 20 MB. Split it or compress it first.`); return; } run('up', async () => { for (const f of fs) await room.upload(l.id, f); notify(fs.length === 1 ? 'Document added' : `${fs.length} documents added`); }); }} />
+          </label>
+          <p className="muted" style={{ margin: 0, fontSize: 12 }}>PDF, images, spreadsheets or Word files, up to 20 MB each. Private: never shown on the public listing.</p>
+          <h3 style={{ margin: '8px 0 0' }}>Access requests</h3>
+          {st.access.length ? <ul className="doclist">{st.access.map((a) => (
+            <li key={a.buyer} className="docrow">
+              <span className="t"><b>{a.email}</b><span className="muted">Accepted confidentiality terms {fmtDate(a.ndaAt)}{a.note ? ` · “${a.note}”` : ''}</span></span>
+              <span className={'badge' + (a.status === 'granted' ? ' ok' : a.status === 'requested' ? ' warn' : '')}>{ACCESS_LABEL[a.status]}</span>
+              <span className="row2" style={{ gap: 8 }}>
+                {a.status !== 'granted' && <button className="btn sm" disabled={!!busy} onClick={() => run('g' + a.buyer, () => room.decide(l.id, a.buyer, 'granted').then(() => notify('Access granted')))}>Grant</button>}
+                {a.status === 'requested' && <button className="btn ghost sm" disabled={!!busy} onClick={() => run('d' + a.buyer, () => room.decide(l.id, a.buyer, 'declined'))}>Decline</button>}
+                {a.status === 'granted' && <button className="btn ghost sm" disabled={!!busy} onClick={() => run('r' + a.buyer, () => room.decide(l.id, a.buyer, 'revoked').then(() => notify('Access removed')))}>Remove access</button>}
+              </span>
+            </li>))}</ul> : <p className="muted" style={{ margin: 0 }}>No requests yet. Buyers see that this listing has {count || 'no'} {count === 1 ? 'document' : 'documents'} and can ask for access.</p>}
+        </>
+      ) : !user ? (
+        <>
+          <p style={{ margin: 0 }}>The seller shares financials and location agreements privately with serious buyers.</p>
+          <button className="btn secondary" style={{ alignSelf: 'flex-start' }} onClick={() => requireAuth({ type: 'go', href: hrefFor(l) }, go)}>Sign in to request access</button>
+        </>
+      ) : mine && mine.status === 'granted' ? (
+        <>
+          <p className="muted" style={{ margin: 0 }}>The seller gave you access. Each time you open a file, the seller can see it. Links expire after five minutes.</p>
+          <ul className="doclist">{st.files.map(fileRow)}</ul>
+        </>
+      ) : mine && mine.status === 'requested' ? (
+        <p className="iconline" style={{ margin: 0 }}><Icon n="clock" size={16} />Request sent {fmtDate(mine.at)}. You’ll see the documents here when the seller grants access.</p>
+      ) : (
+        <form className="stack" style={{ gap: 12 }} noValidate onSubmit={(e) => { e.preventDefault(); if (!agree) { setErr('Accept the confidentiality terms to send your request.'); return; } run('req', () => room.request(l.id, note.trim(), !!mine).then(() => { notify('Request sent to the seller'); setNote(''); setAgree(false); })); }}>
+          {mine && <p className="muted" style={{ margin: 0 }}>{mine.status === 'revoked' ? 'The seller removed your access.' : 'The seller declined your last request.'} You can ask again.</p>}
+          <div className="ndabox">
+            <b>Confidentiality terms</b>
+            <p className="muted" style={{ margin: 0 }}>Between you and the seller. If you get access, you agree to:</p>
+            <ul>{NDA_TERMS.map((x) => <li key={x}>{x}</li>)}</ul>
+            <p className="muted" style={{ margin: 0, fontSize: 12 }}>VendGrid records when you agree and shows the seller your email and when you open each file. The seller may also ask you to sign their own NDA.</p>
+          </div>
+          <label className="checkrow"><input type="checkbox" checked={agree} onChange={(e) => { setAgree(e.target.checked); setErr(''); }} />I agree to these confidentiality terms</label>
+          <Field id="dr-note" label="Note to the seller (optional)" hint="For example, your experience or how you plan to finance it"><textarea id="dr-note" className="textarea" maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
+          <button className="btn" style={{ alignSelf: 'flex-start' }} disabled={busy === 'req'}>{busy === 'req' ? 'Sending…' : 'Request access'}</button>
+        </form>
+      )}
+      {!own && mine && mine.status === 'requested' && room.sandboxGrant && <button className="btn ghost sm" style={{ alignSelf: 'flex-start' }} onClick={() => run('sg', () => room.sandboxGrant(l.id))}>Sandbox: seller grants access</button>}
+      {err && <div className="err" role="alert">{err}</div>}
+    </section>
+  );
+}
+
 function Legal({ route }) {
   const { addTicket, user } = useApp();
   const [f, setF] = useState({ email: user ? user.email : '', topic: 'Question', message: '' });
@@ -1431,9 +1527,13 @@ function Legal({ route }) {
           <button className="btn">Send message</button>
         </form>
       ) : (
-        <div className="stack"><h1>{POLICIES[doc] ? POLICIES[doc][0] : POLICIES.terms[0]}</h1>
-          {(POLICIES[doc] || POLICIES.terms)[1].map((p) => <p key={p} style={{ margin: 0, fontSize: 16, lineHeight: '24px', maxWidth: 680 }}>{p}</p>)}
-          <p className="muted" style={{ margin: 0, fontSize: 12 }}>Draft wording for review. Have counsel approve it before launch.</p></div>
+        (() => { const P = POLICIES[doc] || POLICIES.terms; return (
+          <article className="policy">
+            <header><h1>{P.title}</h1><p className="muted">Last updated {LEGAL.updated}</p></header>
+            <p className="lead">{P.intro}</p>
+            {P.sections.length > 4 && <nav aria-label="On this page" className="toc"><ol>{P.sections.map(([h], i) => <li key={h}><a href={'#pol-' + i} onClick={(e) => { e.preventDefault(); const el = document.getElementById('pol-' + i); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>{h}</a></li>)}</ol></nav>}
+            {P.sections.map(([h, ps], i) => <section key={h} id={'pol-' + i}><h2>{h}</h2>{ps.map((x) => { const m = x.match(/^([A-Z][^:.]{2,40}): (.*)$/); return <p key={x}>{m ? <><b>{m[1]}:</b> {m[2]}</> : x}</p>; })}</section>)}
+          </article>); })()
       )}
     </div>
   );
@@ -1499,47 +1599,61 @@ function Billing({ go }) {
 }
 
 function BusinessSettings({ go }) {
-  const { user, requireAuth, orgs, verif, submitVerif } = useApp();
+  const { user, requireAuth, myOrg, verif, submitVerif, saveOrg } = useApp();
   const [v, setV] = useState({ legal: '', phone: '', domain: '', doc: '' });
+  const [file, setFile] = useState(null);
+  const [p, setP] = useState(null);
   const [err, setErr] = useState('');
+  const [busy, setBusy] = useState('');
   useEffect(() => { if (!user) requireAuth({ type: 'go', href: '#/business-settings' }, go, true); }, [user]);
-  if (!user) return null;
-  const org = orgs.dm;
+  useEffect(() => { setP(myOrg ? { name: myOrg.name, city: myOrg.city || '', about: myOrg.about || '' } : { name: '', city: '', about: '' }); }, [myOrg && myOrg.id, myOrg && myOrg.name]);
+  useEffect(() => { if (verif.status === 'rejected' && verif.data) setV((x) => ({ ...x, legal: verif.data.legal || '', phone: verif.data.phone || '', domain: verif.data.domain || '' })); }, [verif.status]);
+  if (!user || !p) return null;
   const form = verif.status === 'none' || verif.status === 'rejected';
+  const locked = verif.status === 'verified' || verif.status === 'submitted';
+  const dirty = !myOrg || p.name !== myOrg.name || p.city !== (myOrg.city || '') || p.about !== (myOrg.about || '');
   return (
     <div className="page">
-      <div><h1>Business settings</h1><p className="muted" style={{ margin: '4px 0 0' }}>{org.name}</p></div>
+      <div><h1>Business settings</h1><p className="muted" style={{ margin: '4px 0 0' }}>{myOrg ? myOrg.name : 'Set up the name buyers see on your listings.'}</p></div>
+      <form className="panel" noValidate onSubmit={async (e) => { e.preventDefault(); if (p.name.trim().length < 2) { setErr('Add a business name buyers will recognise.'); return; } setBusy('org'); setErr(''); try { await saveOrg({ name: p.name.trim(), city: p.city.trim(), about: p.about.trim() }); } catch (x) { setErr(String(x.message || x)); } setBusy(''); }}>
+        <h2>Public profile</h2>
+        <Field id="bp-n" label="Business name" hint={locked ? <><Icon n="lock" size={13} />Locked while verified or in review. Ask Contact support to change it.</> : 'Shown on every listing you post'}><input id="bp-n" className="input full" value={p.name} disabled={locked} maxLength={80} onChange={(e) => setP({ ...p, name: e.target.value })} /></Field>
+        <Field id="bp-c" label="City"><input id="bp-c" className="input full" value={p.city} maxLength={60} placeholder="Evansville, IN" onChange={(e) => setP({ ...p, city: e.target.value })} /></Field>
+        <Field id="bp-a" label="About" hint="What you sell or service, and the area you cover"><textarea id="bp-a" className="textarea" value={p.about} maxLength={600} onChange={(e) => setP({ ...p, about: e.target.value })} /></Field>
+        <button className="btn secondary" style={{ alignSelf: 'flex-start' }} disabled={!dirty || busy === 'org'}>{busy === 'org' ? 'Saving…' : 'Save profile'}</button>
+      </form>
       <section className="panel">
         <div className="row2" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}><h2>Verified business</h2>
           <span className={'badge' + (verif.status === 'verified' ? ' ok' : verif.status === 'submitted' ? ' warn' : verif.status === 'rejected' ? ' bad' : '')}>{{ none: 'Not verified', submitted: 'In review', verified: 'Verified', rejected: 'Not approved' }[verif.status]}</span></div>
         {form && <ul className="checklist" aria-label="Verification checks">{[['Legal name', v.legal.trim()], ['Business phone', v.phone.trim()], ['Website or domain', v.domain.trim()], ['Registration document', v.doc]].map(([k, ok]) => <li key={k} className={ok ? 'ok' : ''}><Icon n={ok ? 'check' : 'circle'} size={16} />{k}</li>)}</ul>}
         <p className="muted" style={{ margin: 0, fontSize: 12, lineHeight: '16px' }}>Earned by passing checks. It can't be bought, and paid plans don't speed it up.</p>
-        {verif.status === 'verified' && <><ul style={{ margin: 0, paddingLeft: 20 }}>{verif.checks.map((c) => <li key={c}>{c}</li>)}</ul><p className="muted" style={{ margin: 0 }}>Valid until {fmtDate(verif.expires)}.</p></>}
+        {verif.status === 'verified' && <><ul style={{ margin: 0, paddingLeft: 20 }}>{verif.checks.map((c) => <li key={c}>{c}</li>)}</ul>{verif.expires && <p className="muted" style={{ margin: 0 }}>Valid until {fmtDate(verif.expires)}.</p>}</>}
         {verif.status === 'submitted' && <p style={{ margin: 0 }}>We're reviewing your documents. You'll see the result here.</p>}
         {verif.status === 'rejected' && <div className="alert" role="alert"><span>{verif.reason} Update your details and submit again.</span></div>}
         {form && (
-          <form className="stack" noValidate onSubmit={(e) => { e.preventDefault(); if (!v.legal.trim() || !v.phone.trim() || !v.domain.trim() || !v.doc) { setErr('Fill in every field and attach your registration document.'); return; } setErr(''); submitVerif(v); }}>
+          <form className="stack" noValidate onSubmit={async (e) => { e.preventDefault(); if (!v.legal.trim() || !v.phone.trim() || !v.domain.trim() || !v.doc) { setErr('Fill in every field and attach your registration document.'); return; } setErr(''); setBusy('v'); try { await submitVerif(v, file); } catch (x) { setErr(String(x.message || x)); } setBusy(''); }}>
             <Field id="vb-l" label="Legal business name" required><input id="vb-l" className="input full" value={v.legal} onChange={(e) => setV({ ...v, legal: e.target.value })} /></Field>
             <Field id="vb-p" label="Business phone" required hint={<><Icon n="lock" size={13} />Used once to confirm. Never shown publicly</>}><input id="vb-p" className="input full" inputMode="tel" value={v.phone} onChange={(e) => setV({ ...v, phone: e.target.value })} /></Field>
             <Field id="vb-d" label="Business website or email domain" required><input id="vb-d" className="input full" value={v.domain} onChange={(e) => setV({ ...v, domain: e.target.value })} /></Field>
-            <Field id="vb-f" label="Registration document" required hint={v.doc ? `Selected: ${v.doc}. Private, reviewed by staff only.` : 'PDF or photo. Private, reviewed by staff only.'}><input id="vb-f" type="file" accept="application/pdf,image/*" onChange={(e) => setV({ ...v, doc: e.target.files[0] ? e.target.files[0].name : '' })} /></Field>
+            <Field id="vb-f" label="Registration document" required hint={v.doc ? `Selected: ${v.doc}. Private, reviewed by staff only.` : 'Articles of organization, state registration or business licence. PDF or photo, up to 20 MB. Private, reviewed by staff only.'}><input id="vb-f" type="file" accept="application/pdf,image/*" onChange={(e) => { const f = e.target.files[0]; if (f && f.size > 20971520) { setErr('That file is over 20 MB.'); e.target.value = ''; return; } setFile(f || null); setV({ ...v, doc: f ? f.name : '' }); }} /></Field>
             {err && <div className="err" role="alert">{err}</div>}
-            <button className="btn">Submit for review</button>
+            <button className="btn" disabled={busy === 'v'}>{busy === 'v' ? 'Submitting…' : 'Submit for review'}</button>
           </form>
         )}
+        {!form && err && <div className="err" role="alert">{err}</div>}
       </section>
     </div>
   );
 }
 
 function Admin({ route, go }) {
-  const { user, requireAuth, isAdmin, verif, decideVerif, reports, decideReport, listings, orgs, events, invoices, audit, plan, promos, convs, metrics, impr, tickets } = useApp();
-  const [reason, setReason] = useState('');
+  const { user, requireAuth, isAdmin, verifQueue, decideVerif, openVerifDoc, reports, decideReport, listings, orgs, events, invoices, audit, plan, promos, convs, metrics, impr, tickets, closeTicket, live } = useApp();
+  const [reason, setReason] = useState({});
   useEffect(() => { if (!user) requireAuth({ type: 'go', href: '#/admin' }, go, true); }, [user]);
   if (!user) return null;
   if (!isAdmin) return <div className="page"><div className="empty"><h2>Admin only</h2><p>PERMISSION_DENIED. This area is limited to staff accounts. In this demo, sign in with an email that contains "admin" (for example admin@vendgrid.test).</p><a className="btn" href="#/">Back to marketplace</a></div></div>;
   const open = reports.filter((r) => r.status === 'open');
-  const pendingVerif = verif.status === 'submitted' ? 1 : 0;
+  const pendingVerif = verifQueue.filter((q) => q.status === 'submitted').length;
   const L = (id) => listings.find((l) => l.id === id);
   const tabs = [['verification', `Verification (${pendingVerif})`], ['reports', `Reports (${open.length})`], ['billing', 'Billing'], ['metrics', 'Metrics'], ['audit', 'Audit']];
   return (
@@ -1551,13 +1665,17 @@ function Admin({ route, go }) {
         <div><div className="price-lg">{open.length}</div><div className="muted">Open reports</div></div>
       </div>
       <Tabs tabs={tabs} value={route.tab} onChange={(t) => go('#/admin?tab=' + t, true)} />
-      {route.tab === 'verification' && (pendingVerif ? (
-        <div className="panel"><h3>{orgs.dm.name}</h3>
-          <dl className="facts" style={{ margin: 0 }}>{[['Legal name', verif.data.legal], ['Phone', verif.data.phone], ['Domain', verif.data.domain], ['Document', verif.data.doc]].map(([k, x]) => <div className="r" key={k}><dt>{k}</dt><dd>{x}</dd></div>)}</dl>
-          <Field id="rj" label="Reason if not approved"><input id="rj" className="input full" value={reason} onChange={(e) => setReason(e.target.value)} /></Field>
-          <div className="row2"><button className="btn" onClick={() => decideVerif(true)}>Approve</button><button className="btn secondary" onClick={() => decideVerif(false, reason)}>Not approved</button></div>
-        </div>) : <div className="empty"><p>No verification requests waiting. Submit one from Business settings to try this queue.</p></div>)}
-      {route.tab === 'reports' && tickets.length > 0 && <div className="stack"><h3>Support requests</h3><div className="list">{tickets.map((t) => <div className="item" key={t.id} style={{ cursor: 'default' }}><div className="t"><b>{t.topic}</b><span className="muted">{t.email} · {t.message}</span></div></div>)}</div><h3>Listing reports</h3></div>}
+      {route.tab === 'verification' && (verifQueue.length ? <div className="stack">{verifQueue.map((q) => (
+        <div className="panel" key={q.orgId}>
+          <div className="row2" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}><h3 style={{ margin: 0 }}>{(orgs[q.orgId] || {}).name || q.orgId}</h3><span className={'badge' + (q.status === 'verified' ? ' ok' : q.status === 'submitted' ? ' warn' : ' bad')}>{{ submitted: 'Waiting for review', verified: 'Verified', rejected: 'Not approved' }[q.status]}</span></div>
+          <dl className="facts" style={{ margin: 0 }}>{[['Legal name', q.legal], ['Phone', q.phone], ['Domain', q.domain], ['Submitted', fmtDate(q.at)]].map(([k, x]) => <div className="r" key={k}><dt>{k}</dt><dd>{x}</dd></div>)}</dl>
+          {q.docPath || q.docName ? <button className="btn secondary sm" style={{ alignSelf: 'flex-start' }} onClick={() => openVerifDoc(q)}><Icon n="file" size={16} />Open registration document</button> : <p className="muted" style={{ margin: 0 }}>No document attached.</p>}
+          {q.status === 'submitted' ? <>
+            <Field id={'rj-' + q.orgId} label="Reason if not approved" hint="The business sees this"><input id={'rj-' + q.orgId} className="input full" value={reason[q.orgId] || ''} onChange={(e) => setReason({ ...reason, [q.orgId]: e.target.value })} /></Field>
+            <div className="row2"><button className="btn" onClick={() => decideVerif(q.orgId, true)}>Approve</button><button className="btn secondary" onClick={() => decideVerif(q.orgId, false, reason[q.orgId])}>Not approved</button></div>
+          </> : q.status === 'rejected' && q.reason ? <p className="muted" style={{ margin: 0 }}>Reason given: {q.reason}</p> : q.expires ? <p className="muted" style={{ margin: 0 }}>Valid until {fmtDate(q.expires)}</p> : null}
+        </div>))}</div> : <div className="empty"><p>No verification requests yet. Businesses apply from Business settings.</p></div>)}
+      {route.tab === 'reports' && tickets.length > 0 && <div className="stack"><h3>Support requests</h3><div className="list">{tickets.map((t) => <div className="item" key={t.id} style={{ cursor: 'default', flexWrap: 'wrap' }}><div className="t"><b>{t.topic}{t.status === 'closed' ? ' · closed' : ''}</b><span className="muted">{t.email}{t.at ? ' · ' + fmtDate(t.at) : ''} · {t.message}</span></div>{t.status !== 'closed' && closeTicket && <button className="btn ghost sm" onClick={() => closeTicket(t.id)}>Mark done</button>}</div>)}</div><h3>Listing reports</h3></div>}
       {route.tab === 'reports' && (reports.length ? <div className="list">{reports.map((r) => (
         <div className="item" key={r.id} style={{ cursor: 'default', flexWrap: 'wrap' }}>
           <div className="t"><b>{(L(r.listingId) || {}).title || 'Listing'}</b><span className="muted">{r.reason} · by {r.by} · {r.status}</span></div>
@@ -1575,7 +1693,7 @@ function Admin({ route, go }) {
           {listings.filter((l) => l.sponsored).length ? <div className="list">{listings.filter((l) => l.sponsored).map((l) => { const im = impr[l.id] || 0, iq = convs.filter((c) => c.listingId === l.id).length; return <div className="item" key={l.id} style={{ cursor: 'default' }}><div className="t"><b>{l.title}</b><span className="muted">{im} {im === 1 ? 'impression' : 'impressions'} · {iq} {iq === 1 ? 'inquiry' : 'inquiries'}{im ? ` · ${((iq / im) * 100).toFixed(1)}% inquiry rate` : ''}</span></div></div>; })}</div> : <p className="muted" style={{ margin: 0 }}>No sponsored listings are live.</p>}
         </div>)}
       {route.tab === 'audit' && (audit.length ? <div className="list">{audit.map((a, i) => <div className="item" key={i} style={{ cursor: 'default' }}><div className="t"><b>{a.msg}</b><span className="muted">{a.by} · {new Date(a.at).toLocaleString()}</span></div></div>)}</div> : <div className="empty"><p>No audit events yet.</p></div>)}
-      <p className="muted" style={{ margin: 0, fontSize: 12 }}>Demo only: in production these roles are enforced on the server and every admin read is logged.</p>
+      <p className="muted" style={{ margin: 0, fontSize: 12 }}>{live ? 'Verification, reports and support requests are live, and the database enforces staff access. Billing, metrics and audit are still sample data.' : 'Demo only: in production these roles are enforced on the server and every admin read is logged.'}</p>
     </div>
   );
 }
@@ -1630,11 +1748,23 @@ function Login({ route, go }) {
 }
 
 /* ───────────── app ───────────── */
+// A crawlable path (/listing/12-…, /vending-routes-for-sale, /terms) opens the matching screen, then the
+// address bar moves to the app's own form so in-app navigation keeps working from the site root.
+let BOOT = null;
+function bootAddr() {
+  if (BOOT) return BOOT;
+  if (typeof location === 'undefined') return (BOOT = '#/');
+  const fromHash = fromAddr(location.hash);
+  const fromPath = !location.hash || location.hash === '#' ? pathToRoute(location.pathname) : null;
+  BOOT = fromPath || fromHash;
+  if (fromPath) { try { history.replaceState(null, '', '/' + location.search + toAddr(fromPath)); } catch (e) { /* sandboxed */ } }
+  return BOOT;
+}
 const UNKNOWN_ORG = { id: 'unknown', name: 'Independent seller', slug: '', city: '', about: '', verified: false };
 const withFallbackOrg = (o) => new Proxy(o, { get: (t, k) => (k in t || typeof k !== 'string' ? t[k] : UNKNOWN_ORG) });
 
 export default function App() {
-  const [hash, setHash] = useState(() => fromAddr(typeof location !== 'undefined' ? location.hash : ''));
+  const [hash, setHash] = useState(bootAddr);
   const [listings, setListings] = usePersist('listings', SEED);
   const [user, setUser] = usePersist('user', null);
   const [favs, setFavs] = usePersist('favs', () => new Set(), (x) => [...x], (a) => new Set(a));
@@ -1670,9 +1800,16 @@ export default function App() {
   const live = mode === 'live';
   const [seenAt, setSeenAt] = usePersist('seenAt', {});
   const [liveReports, setLiveReports] = useState([]);
+  const [liveVerif, setLiveVerif] = useState(null);
+  const [liveVerifQueue, setLiveVerifQueue] = useState([]);
+  const [liveTickets, setLiveTickets] = useState([]);
+  const [dmOrg, setDmOrg] = usePersist('dmOrg', {});
+  const [rooms, setRooms] = usePersist('rooms', DEMO_ROOMS);
+  const roomsRef = useRef(rooms); roomsRef.current = rooms;
+  const blobs = useRef({});
   const seenImpr = useRef(new Set());
   const pending = useRef(null);
-  const stack = useRef([fromAddr(typeof location !== 'undefined' ? location.hash : '')]);
+  const stack = useRef([bootAddr()]);
   const toastT = useRef(null);
   const nextId = useRef(Math.max(1000, ...listings.map((l) => (typeof l.id === 'number' ? l.id : 0))));
   const route = useMemo(() => parseHash(hash), [hash]);
@@ -1698,7 +1835,8 @@ export default function App() {
     if (route.name !== 'listing' && route.name !== 'business') document.title = (T[route.name] || 'VendGrid') + ' · VendGrid';
   }, [route.name, route.query && route.query.cat]);
 
-  const orgs = useMemo(() => withFallbackOrg(live ? liveOrgs : { ...ORGS, dm: { ...ORGS.dm, verified: verif.status === 'verified' } }), [live, liveOrgs, verif.status]);
+  const orgs = useMemo(() => withFallbackOrg(live ? liveOrgs : { ...ORGS, dm: { ...ORGS.dm, ...dmOrg, verified: verif.status === 'verified' } }), [live, liveOrgs, verif.status, dmOrg]);
+  const myOrg = live ? (profile && profile.org_id && liveOrgs[profile.org_id]) || null : orgs.dm;
   const srcListings = live ? liveListings : listings;
   const liveConvsSeen = useMemo(() => liveConvs.map((c) => ({ ...c, unread: c.msgs.filter((m) => m.from === 'them' && m.at > (seenAt[c.id] || 0)).length })), [liveConvs, seenAt]);
   const curUser = live ? liveUser : user, curFavs = live ? liveFavs : favs, curSearches = live ? liveSearches : searches, curConvs = live ? liveConvsSeen : convs;
@@ -1717,12 +1855,13 @@ export default function App() {
   const liveErr = (e) => notify(String(e && e.message || e).replace(/^.*?: /, '') || 'Something went wrong. Try again.');
   const refreshCatalog = async (uid) => { const c = await api.loadCatalog(uid); setLiveOrgs(c.orgs); setLiveListings(c.listings); return c; };
   const refreshConvs = async (uid, c) => { try { setLiveConvs(await api.loadConversations(uid, c ? c.orgs : liveOrgs, c ? c.listings : liveListings)); } catch (e) { /* keep last good copy */ } };
+  const loadStaff = () => { api.loadReports().then(setLiveReports).catch(() => {}); api.loadVerifQueue().then(setLiveVerifQueue).catch(() => {}); api.loadSupport().then(setLiveTickets).catch(() => {}); };
   const onSession = async (session) => {
     const u = session && session.user ? { id: session.user.id, email: session.user.email, name: (session.user.email || '').split('@')[0] } : null;
     setLiveUser(u);
     const c = await refreshCatalog(u && u.id).catch(() => null);
-    if (!u) { setLiveFavs(new Set()); setLiveSearches([]); setLiveConvs([]); setProfile(null); return; }
-    try { const m = await api.loadMine(u.id); setProfile(m.profile); setLiveFavs(m.favs); setLiveSearches(m.searches); if (m.profile && m.profile.role === 'admin') api.loadReports().then(setLiveReports).catch(() => {}); } catch (e) { /* signed in, but extras failed */ }
+    if (!u) { setLiveFavs(new Set()); setLiveSearches([]); setLiveConvs([]); setProfile(null); setLiveVerif(null); setLiveVerifQueue([]); setLiveTickets([]); setLiveReports([]); return; }
+    try { const m = await api.loadMine(u.id); setProfile(m.profile); setLiveFavs(m.favs); setLiveSearches(m.searches); if (m.profile && m.profile.role === 'admin') loadStaff(); if (m.profile && m.profile.org_id) api.loadVerification(m.profile.org_id).then(setLiveVerif).catch(() => {}); else setLiveVerif(null); } catch (e) { /* signed in, but extras failed */ }
     await refreshConvs(u.id, c);
     const p = pending.current; pending.current = null;
     if (p && p.type === 'save') { setLiveFavs((f) => new Set(f).add(p.id)); api.addFav(u.id, p.id).catch(liveErr); }
@@ -1846,7 +1985,7 @@ export default function App() {
   };
   const track = (n) => setMetrics((m) => ({ ...m, [n]: (m[n] || 0) + 1 }));
   const trackImpr = (key, ids) => ids.forEach((id) => { const k = key + ':' + id; if (seenImpr.current.has(k)) return; seenImpr.current.add(k); setImpr((m) => ({ ...m, [id]: (m[id] || 0) + 1 })); });
-  const addTicket = (t) => { setTickets((x) => [{ id: 't-' + Date.now(), at: Date.now(), ...t }, ...x]); log('Support request received'); notify('Request sent. We’ll reply by email.'); };
+  const addTicket = (t) => { if (live) { return api.addSupport(t).then(() => notify('Request sent. We’ll reply by email.')).catch(liveErr); } setTickets((x) => [{ id: 't-' + Date.now(), at: Date.now(), ...t }, ...x]); log('Support request received'); notify('Request sent. We’ll reply by email.'); };
   const nid = () => Math.random().toString(36).slice(2, 8);
   const processEvent = (id, type, apply) => {
     if (events.some((e) => e.id === id)) { notify('Duplicate payment event ignored. It was already processed.'); return; }
@@ -1873,9 +2012,53 @@ export default function App() {
     log(`Billing confirmed for ${ref}`);
     });
   };
-  const submitVerif = (data) => { setVerif({ status: 'submitted', data, at: Date.now() }); log('Submitted verification documents'); };
-  const decideVerif = (ok, reason) => {
+  const closeTicket = (id) => { if (live) { setLiveTickets((x) => x.map((t) => (t.id === id ? { ...t, status: 'closed' } : t))); api.closeSupport(id).catch(liveErr); return; } setTickets((x) => x.map((t) => (t.id === id ? { ...t, status: 'closed' } : t))); };
+  const VERIF_CHECKS = ['Registration document reviewed', 'Business phone confirmed', 'Website domain matches contact email'];
+  const verifView = live ? (liveVerif ? { status: liveVerif.status, data: { legal: liveVerif.legal, phone: liveVerif.phone, domain: liveVerif.domain }, reason: liveVerif.reason, expires: liveVerif.expires, checks: VERIF_CHECKS } : { status: 'none' }) : verif;
+  const verifQueue = live ? liveVerifQueue : verif.status !== 'none' && verif.data ? [{ orgId: 'dm', status: verif.status, legal: verif.data.legal, phone: verif.data.phone, domain: verif.data.domain, docName: verif.data.doc, at: verif.at || Date.now(), reason: verif.reason, expires: verif.expires }] : [];
+  const saveOrg = async (patch) => {
+    if (!live) { setDmOrg((o) => ({ ...o, ...patch })); notify('Profile saved'); return; }
+    const id = (profile && profile.org_id) || (await api.ensureOrg(liveUser, profile));
+    if (!profile || !profile.org_id) setProfile((pr) => ({ ...(pr || {}), org_id: id }));
+    const o = await api.updateOrg(id, patch);
+    setLiveOrgs((os) => ({ ...os, [id]: o })); notify('Profile saved');
+  };
+  const submitVerif = async (data, file) => {
+    if (live) {
+      const r = await api.submitVerification(liveUser, profile, data, file, !!liveVerif && liveVerif.status === 'rejected');
+      if (!profile || !profile.org_id) { setProfile((pr) => ({ ...(pr || {}), org_id: r.org_id })); refreshCatalog(liveUser.id).catch(() => {}); }
+      setLiveVerif(r.verif); notify('Sent for review'); return;
+    }
+    setVerif({ status: 'submitted', data, at: Date.now() }); log('Submitted verification documents');
+  };
+  const openVerifDoc = async (q) => {
+    if (!live) { notify(`Demo: ${q.docName || 'the document'} stays on your device. In the live app this opens a private link that expires in five minutes.`); return; }
+    const w = (() => { try { return window.open('', '_blank'); } catch (e) { return null; } })();
+    try { const url = await api.signDoc(q.docPath); if (w) w.location.href = url; else location.assign(url); } catch (e) { if (w) w.close(); liveErr(e); }
+  };
+  const room = live ? {
+    load: (id) => api.loadDocRoom(id),
+    upload: (id, f) => api.uploadDoc(liveUser.id, id, f),
+    remove: (f) => api.removeDoc(f),
+    request: (id, note, again) => api.requestDocs(id, note, again),
+    decide: (id, buyer, status) => api.decideDocs(id, buyer, status),
+    open: (f) => api.openDoc(f),
+  } : {
+    load: async (id) => { const r = roomsRef.current[id] || { files: [], access: [] }; return { count: r.files.length, files: r.files, access: r.access }; },
+    upload: async (id, f) => { const fid = 'd' + Date.now() + Math.random().toString(36).slice(2, 5); blobs.current[fid] = f; const next = { ...roomsRef.current }; const r = next[id] || { files: [], access: [] }; next[id] = { ...r, files: [...r.files, { id: fid, name: f.name, size: f.size, mime: f.type, at: Date.now(), views: [] }] }; roomsRef.current = next; setRooms(next); },
+    remove: async (f) => { const next = {}; Object.entries(roomsRef.current).forEach(([k, r]) => { next[k] = { ...r, files: r.files.filter((x) => x.id !== f.id) }; }); roomsRef.current = next; setRooms(next); },
+    request: async (id, note) => { if (!curUser) throw new Error('Sign in first'); const next = { ...roomsRef.current }; const r = next[id] || { files: [], access: [] }; next[id] = { ...r, access: [{ buyer: curUser.email, email: curUser.email, status: 'requested', ndaAt: Date.now(), note, at: Date.now() }, ...r.access.filter((a) => a.buyer !== curUser.email)] }; roomsRef.current = next; setRooms(next); },
+    decide: async (id, buyer, status) => { const next = { ...roomsRef.current }; const r = next[id]; next[id] = { ...r, access: r.access.map((a) => (a.buyer === buyer ? { ...a, status, decidedAt: Date.now() } : a)) }; roomsRef.current = next; setRooms(next); },
+    open: async (f) => {
+      const next = {}; Object.entries(roomsRef.current).forEach(([k, r]) => { next[k] = { ...r, files: r.files.map((x) => (x.id === f.id ? { ...x, views: [...x.views, { by: curUser && curUser.email, at: Date.now() }] } : x)) }; }); roomsRef.current = next; setRooms(next);
+      const b = blobs.current[f.id] || new Blob([`${f.name}\n\nSample document for the VendGrid demo.\nIn the live app this is the seller's file, opened through a private link that expires after five minutes.\n`], { type: 'text/plain' });
+      return URL.createObjectURL(b);
+    },
+    sandboxGrant: async (id) => { const r = roomsRef.current[id]; const a = r && r.access.find((x) => curUser && x.buyer === curUser.email); if (a) await room.decide(id, a.buyer, 'granted'); },
+  };
+  const decideVerif = (orgId, ok, reason) => {
     if (!isAdmin) { notify('PERMISSION_DENIED'); return; }
+    if (live) { api.decideVerification(orgId, ok, reason).then(() => { notify(ok ? 'Business verified' : 'Marked not approved'); loadStaff(); refreshCatalog(liveUser.id).catch(() => {}); }).catch(liveErr); return; }
     setVerif((v) => (ok ? { status: 'verified', data: v.data, at: Date.now(), expires: Date.now() + 365 * 864e5, checks: ['Registration document reviewed', 'Business phone confirmed', 'Website domain matches contact email'] } : { status: 'rejected', data: v.data, reason: reason || 'Details could not be confirmed.' }));
     log(ok ? 'Approved business verification' : 'Rejected business verification');
   };
@@ -1899,7 +2082,7 @@ export default function App() {
     const h = (e) => { const el = e.target.closest && e.target.closest('a[href^="#/"]'); if (!el || e.defaultPrevented || e.metaKey || e.ctrlKey || e.button) return; e.preventDefault(); go(el.getAttribute('href')); };
     document.addEventListener('click', h); return () => document.removeEventListener('click', h);
   }, [go]);
-  const ctx = { themeSel, seeSearch, listings: allListings, priv, metrics, impr, tickets, track, trackImpr, addTicket, isPro, isAdmin, plan, promos: promosView, verif, reports: live ? liveReports : reports, events, invoices, audit, views, subscribe, cancelPlan, promote, cancelPromo, confirmPayment, processEvent, submitVerif, decideVerif, decideReport, bumpView, orgs, user: curUser, favs: curFavs, searches: curSearches, convs: curConvs, live, mode, sendMagicLink, drafts, prefLoc, setPrefLoc, theme, setTheme, unread, notify, requireAuth, signIn, signOut, toggleFav, saveSearch, removeSearch, searchFromText, startInquiry, sendMsg, markRead, setConvStatus, blockConv, report, setStatus, publish, setDraft };
+  const ctx = { themeSel, seeSearch, listings: allListings, priv, metrics, impr, tickets: live ? liveTickets : tickets, track, trackImpr, addTicket, isPro, isAdmin, plan, promos: promosView, verif: verifView, verifQueue, openVerifDoc, myOrg, saveOrg, room, closeTicket, reports: live ? liveReports : reports, events, invoices, audit, views, subscribe, cancelPlan, promote, cancelPromo, confirmPayment, processEvent, submitVerif, decideVerif, decideReport, bumpView, orgs, user: curUser, favs: curFavs, searches: curSearches, convs: curConvs, live, mode, sendMagicLink, drafts, prefLoc, setPrefLoc, theme, setTheme, unread, notify, requireAuth, signIn, signOut, toggleFav, saveSearch, removeSearch, searchFromText, startInquiry, sendMsg, markRead, setConvStatus, blockConv, report, setStatus, publish, setDraft };
 
   let view;
   switch (route.name) {

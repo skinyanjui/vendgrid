@@ -1,5 +1,15 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "installCommand": "npm ci"
+  "installCommand": "npm ci",
+  "functions": {
+    "api/seo.js": { "includeFiles": "dist/index.html", "maxDuration": 10 }
+  },
+  "rewrites": [
+    { "source": "/listing/:slug", "destination": "/api/seo?kind=listing&slug=:slug" },
+    { "source": "/:c(vending-machines|vending-machine-parts|vending-locations|vending-routes-for-sale|vending-services|vending-wanted)", "destination": "/api/seo?kind=cat&c=:c" },
+    { "source": "/:doc(terms|privacy|refunds)", "destination": "/api/seo?kind=policy&doc=:doc" },
+    { "source": "/sitemap.xml", "destination": "/api/seo?kind=sitemap" },
+    { "source": "/robots.txt", "destination": "/api/seo?kind=robots" }
+  ]
 }

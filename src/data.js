@@ -416,3 +416,17 @@ SEED.forEach((l) => { if (['dm'].includes(l.org)) l.mine = true; });
 export const PRIVATE_SEED = { 201: '4100 Distribution Dr' };
 export const slugify = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
 export const hrefFor = (l) => `#/listing/${l.id}/${slugify(l.title)}`;
+
+// Demo document rooms for route listings (names and sizes only; opening one shows a sample notice).
+const ROOM_AT = Date.UTC(2026, 9, 20);
+export const DEMO_ROOMS = {
+  301: { files: [
+    { id: 'demo-301-1', name: '2025 profit and loss (sample).pdf', size: 188416, mime: 'application/pdf', at: ROOM_AT, views: [] },
+    { id: 'demo-301-2', name: 'Location agreements, 11 sites (sample).pdf', size: 942080, mime: 'application/pdf', at: ROOM_AT, views: [] },
+    { id: 'demo-301-3', name: 'Machine list with serials (sample).xlsx', size: 40960, mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', at: ROOM_AT, views: [] },
+  ], access: [] },
+  303: { files: [
+    { id: 'demo-303-1', name: 'Micro market sales by site, 2025 (sample).xlsx', size: 61440, mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', at: ROOM_AT, views: [] },
+    { id: 'demo-303-2', name: 'Commission statements (sample).pdf', size: 311296, mime: 'application/pdf', at: ROOM_AT, views: [] },
+  ], access: [] },
+};
