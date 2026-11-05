@@ -821,7 +821,7 @@ function Header({ route, go }) {
   );
 }
 function Sidebar({ route }) {
-  const { user, unread, prefLoc, noteCount, listings, myOrg } = useApp();
+  const { user, unread, prefLoc, noteCount, listings, myOrg, live } = useApp();
   // On a listing page the menu keeps your place: it highlights the category the listing belongs to.
   const cat = route.name === 'browse' ? route.query.cat : route.name === 'listing' ? (listings.find((x) => x.id === route.id) || {}).type || null : null;
   const loc = route.name === 'browse' ? route.query.loc : prefLoc;
@@ -868,6 +868,10 @@ function Sidebar({ route }) {
             <a className="sacct-bell" href="#/activity" aria-current={cur(route.name === 'activity')} aria-label={noteCount > 0 ? `Activity, ${noteCount} new` : 'Activity'} title="Activity"><Icon n="bell" size={18} />{noteCount > 0 && <span className="ndot" aria-hidden="true" />}</a>
           </div>
         ) : <a className="btn sm sbtn" href="#/login"><Icon n="user" size={16} /><span className="slabel">Sign in</span></a>}
+      </div>
+      <div className="sfoot">
+        {FOOT_GROUPS.map(([h, links]) => <nav key={h} aria-label={h}>{links.filter(([l]) => l !== 'Buyer’s guide').map(([l, to]) => <a key={l} href={to} aria-current={cur(route.name === 'info' && to === '#/' + route.doc)}>{l}</a>)}</nav>)}
+        <span>{footNote(live)}</span>
       </div>
     </nav>
   );
@@ -1888,17 +1892,19 @@ function Legal({ route }) {
     </div>
   );
 }
+const FOOT_GROUPS = [
+  ['VendGrid', [['About', '#/about'], ['Sellers', '#/sellers'], ['Pricing', '#/pricing']]],
+  ['Help', [['Buyer’s guide', '#/guide'], ['Seller guide', '#/seller-guide'], ['Safety', '#/safety'], ['Contact support', '#/support']]],
+  ['Legal', [['Terms', '#/legal?doc=terms'], ['Privacy', '#/legal?doc=privacy'], ['Refunds', '#/legal?doc=refunds']]],
+];
+const footNote = (live) => (live ? 'Sample listings from demo businesses are mixed in while VendGrid launches.' : 'Demo inventory. Listings are sample data, not live offers.');
 function Footer() {
   const { live } = useApp();
-  const groups = [
-    ['VendGrid', [['About', '#/about'], ['Sellers', '#/sellers'], ['Pricing', '#/pricing']]],
-    ['Help', [['Buyer’s guide', '#/guide'], ['Seller guide', '#/seller-guide'], ['Safety', '#/safety'], ['Contact support', '#/support']]],
-    ['Legal', [['Terms', '#/legal?doc=terms'], ['Privacy', '#/legal?doc=privacy'], ['Refunds', '#/legal?doc=refunds']]],
-  ];
+  const groups = FOOT_GROUPS;
   return (
     <footer className="foot">
       <div className="footcols">{groups.map(([h, links]) => <nav key={h} aria-label={h}><b>{h}</b>{links.map(([l, to]) => <a key={l} href={to}>{l}</a>)}</nav>)}</div>
-      <span className="muted">{live ? 'Sample listings from demo businesses are mixed in while VendGrid launches.' : 'Demo inventory. Listings are sample data, not live offers.'}</span>
+      <span className="muted">{footNote(live)}</span>
     </footer>
   );
 }

@@ -905,4 +905,17 @@ a.u{text-decoration:underline;text-underline-offset:2px}
 
 .sname .sntxt{min-width:0;overflow:hidden;text-overflow:ellipsis}
 
+/* big screens: the page footer moves into the sidebar */
+.sfoot{display:none}
+@media(min-width:1024px){
+  .layout:not(.navoff) .foot{display:none}
+  .layout:not(.navoff) main{padding-bottom:64px}
+  .sidebar .sfoot{display:flex;flex-direction:column;gap:2px;margin-top:12px;padding:12px 12px 0;border-top:1px solid var(--border);font-size:12px;line-height:16px;color:var(--text-muted)}
+  .sfoot nav{display:flex;flex-wrap:wrap;gap:0 12px}
+  .sidebar .sfoot a{display:inline-flex;height:24px;padding:0;border-radius:0;font-weight:400;color:var(--text-muted);text-decoration:none}
+  .sidebar .sfoot a:hover{background:none;color:var(--foreground);text-decoration:underline}
+  .sidebar .sfoot a[aria-current=page]{background:none;color:var(--foreground);font-weight:500}
+  .sfoot span{margin-top:8px;padding-bottom:4px}
+}
+
 `;
