@@ -969,4 +969,25 @@ a.u{text-decoration:underline;text-underline-offset:2px}
 @media(min-width:768px) and (max-height:640px){.authsub{display:none}}
 @media(min-width:768px) and (max-width:1023px){.authstats{gap:16px}.authstats dt{font-size:20px;line-height:28px}}
 
+/* auth results panel: counted from live data */
+.authbig{display:flex;flex-direction:column;gap:0}
+.authbig b{font-size:72px;line-height:72px;font-weight:600;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+.authbig span{font-size:16px;line-height:24px;color:var(--gray-800)}
+.authtiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:0}
+.authtiles div{display:flex;flex-direction:column;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--background)}
+.authtiles dt{font-size:28px;line-height:34px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.authtiles dd{margin:0;font-size:12px;line-height:16px;color:var(--text-muted)}
+.authrecent{display:flex;flex-direction:column;gap:8px}
+.authrecent h2{margin:0;font-size:12px;line-height:16px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted)}
+.authrecent ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.authrecent li{display:flex;align-items:center;gap:12px;padding:8px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--background);line-height:20px}
+.authrecent img{flex:none;width:44px;height:44px;border-radius:var(--radius-md);object-fit:cover;background:var(--gray-200)}
+.authrecent .rt{flex:1;min-width:0;display:flex;flex-direction:column}
+.authrecent .rt b{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.authrecent .rt span{font-size:12px;line-height:16px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.authrecent .badge{flex:none}
+@media(min-width:768px) and (max-height:819px){.authrecent{display:none}}
+@media(min-width:768px) and (max-height:620px){.authtiles{display:none}}
+@media(min-width:768px) and (max-width:1023px){.authbig b{font-size:56px;line-height:56px}.authtiles dt{font-size:22px;line-height:28px}.authtiles div{padding:10px 12px}}
+
 `;

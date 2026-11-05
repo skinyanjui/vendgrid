@@ -2196,36 +2196,41 @@ function PasswordField({ id, label, value, onChange, error, hint, autoComplete, 
 const AuthBrand = () => <a className="authbrand" href="#/" aria-label="VendGrid home"><BrandMark /><span>VendGrid</span></a>;
 function AuthShell({ children }) {
   // The left side never changes with the form: same content, same place, whatever the visitor taps on the right.
+  // It shows what the marketplace holds right now, counted from the live data, rather than describing it.
   const { listings, orgs } = useApp();
   const pub = listings.filter((l) => l.status === 'published');
-  const shots = pub.filter((l) => l.type === 'machines' && l.photos[0]).slice(0, 3);
-  const nVerified = new Set(pub.map((l) => l.org).filter((o) => orgs[o] && orgs[o].verified)).size;
-  const nCities = new Set(pub.map((l) => `${l.geo.city},${l.geo.st}`)).size;
-  const stats = [[pub.length, 'live listings'], [nVerified, 'verified businesses'], [nCities, 'cities']];
+  const sig = priceSignals(listings);
+  const week = pub.filter((l) => Date.now() - l.createdAt < 7 * 864e5).length;
+  const verified = new Set(pub.map((l) => l.org).filter((o) => orgs[o] && orgs[o].verified)).size;
+  const cities = new Set(pub.map((l) => `${l.geo.city},${l.geo.st}`)).size;
+  const states = new Set(pub.map((l) => l.geo.st)).size;
+  const kinds = new Set(pub.map((l) => l.type)).size;
+  const value = pub.filter((l) => l.type !== 'wanted').reduce((n, l) => n + (l.price > 0 ? l.price : 0), 0);
+  const money = (n) => (n >= 1e6 ? `$${(n / 1e6).toFixed(1).replace(/\.0$/, '')}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}k` : `$${n}`);
+  const recent = [...pub].filter((l) => l.photos[0]).sort((x, y) => y.createdAt - x.createdAt).slice(0, 3);
+  const tiles = [[verified, 'verified businesses'], [cities, `cities in ${states} ${states === 1 ? 'state' : 'states'}`], [week, 'new this week'], [money(value), 'in equipment and routes listed']];
   return (
     <div className="authgrid authpage">
-      <aside className="authaside" aria-label="About VendGrid">
+      <aside className="authaside" aria-label="VendGrid today">
         <AuthBrand />
         <div className="authpitch">
-          <p className="authkick">The vending marketplace</p>
-          <h2>Find the machine, the location or the route. Skip the guesswork.</h2>
-          <p className="authsub">Buy and sell machines and parts, find places to put them, take over routes and hire local help, all in one search.</p>
-          {shots.length > 0 && (
-            <div className="authshots" aria-hidden="true">
-              {shots.map((l, i) => (
-                <figure key={l.id} className={'ashot s' + i}>
-                  <img src={l.photos[0]} alt="" loading="lazy" />
-                  <figcaption><b>{priceText(l)}</b><span>{l.geo.city}, {l.geo.st}</span></figcaption>
-                </figure>
-              ))}
+          <p className="authkick">VendGrid today</p>
+          <div className="authbig"><b>{pub.length}</b><span>live listings across {kinds} categories</span></div>
+          <dl className="authtiles">{tiles.map(([n, l]) => <div key={l}><dt>{n}</dt><dd>{l}</dd></div>)}</dl>
+          {recent.length > 0 && (
+            <div className="authrecent">
+              <h2>Just listed</h2>
+              <ul>
+                {recent.map((l) => { const g = sig(l); return (
+                  <li key={l.id}>
+                    <img src={l.photos[0]} alt="" loading="lazy" />
+                    <span className="rt"><b>{l.title}</b><span>{l.geo.city}, {l.geo.st} · {priceText(l)}</span></span>
+                    {g ? <span className="badge ok">{g.kind === 'drop' ? 'Price drop' : 'Below similar'}</span> : <span className="badge info">New</span>}
+                  </li>
+                ); })}
+              </ul>
             </div>
           )}
-          <dl className="authstats">{stats.map(([n, l]) => <div key={l}><dt>{n}</dt><dd>{l}</dd></div>)}</dl>
-          <ul>
-            <li><Icon n="check" size={18} /><span><b>Verified</b> is earned by review, never bought.</span></li>
-            <li><Icon n="send" size={18} /><span><b>Every message</b> stays tied to the listing it is about.</span></li>
-            <li><Icon n="box" size={18} /><span><b>Free to post</b> machines, parts, locations, routes and services.</span></li>
-          </ul>
         </div>
         <nav className="authlegal" aria-label="Legal"><a href="#/legal?doc=terms">Terms</a><a href="#/legal?doc=privacy">Privacy</a><a href="#/safety">Safety</a></nav>
       </aside>
