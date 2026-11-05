@@ -845,4 +845,12 @@ a.u{text-decoration:underline;text-underline-offset:2px}
 .cprow{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
 .cprow .cprice{min-width:0}.cprow .badge{flex:none}
 
+.pricenote{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:12px;line-height:16px;color:var(--text-muted)}
+/* sponsored cards: amber border; card action: blue so the next step reads as one */
+.card.sponsored{border-color:var(--amber)}
+.card.sponsored:hover,.card.sponsored:focus-within{border-color:var(--amber)}
+.cact{color:var(--blue);border-color:var(--info-bd);background:var(--info-bg);font-weight:600}
+.cact:hover{color:var(--on-blue);background:var(--blue);border-color:var(--blue)}
+.cact:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+
 `;

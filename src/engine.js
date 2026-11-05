@@ -227,3 +227,32 @@ export function describeQuery(query) {
 }
 
 export const priceText = (l) => (l.type === 'wanted' ? (l.price != null ? 'Budget ' + FMT(l.price) : 'Budget open') : l.price != null ? FMT(l.price) : l.priceType === 'negotiable' ? 'Negotiable' : l.type === 'locations' ? (l.f && +l.f.commission ? `${+l.f.commission}% commission` : l.f && +l.f.rent ? `${FMT(+l.f.rent)}/mo rent asked` : l.f && l.f.terms === 'Free placement' ? 'Free placement' : 'Accepting proposals') : l.type === 'services' ? (l.f.rate || 'Request quote') : TYPES[l.type].noPriceText);
+
+/* Price signals. A drop needs a recorded change (the database keeps an append-only price history).
+   "Below similar" only appears when at least 5 comparable listings exist, and only for a clear gap (20%+ under the median). */
+const SIG = new WeakMap();
+const median = (a) => { const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+export function priceSignals(listings) {
+  let m = SIG.get(listings);
+  if (m) return m;
+  const groups = new Map();
+  for (const l of listings) {
+    if (l.status !== 'published' || l.price == null || l.price <= 0 || (l.type !== 'machines' && l.type !== 'parts')) continue;
+    const k = l.type + '|' + (l.f.condition || '');
+    (groups.get(k) || groups.set(k, []).get(k)).push(l.price);
+  }
+  const med = new Map([...groups].filter(([, v]) => v.length >= 5).map(([k, v]) => [k, [median(v), v.length]]));
+  const now = Date.now(), cache = new Map();
+  m = (l) => {
+    if (cache.has(l.id)) return cache.get(l.id);
+    let out = null;
+    const h = (l.priceHistory || []).filter((x) => x.to < x.from && now - x.at < 30 * 864e5).pop();
+    if (l.status === 'published' && h && l.price === h.to) out = { kind: 'drop', from: h.from, at: h.at, pct: Math.round((1 - h.to / h.from) * 100) };
+    else if (l.status === 'published' && l.price > 0) {
+      const g = med.get(l.type + '|' + (l.f.condition || ''));
+      if (g && l.price <= g[0] * 0.8) out = { kind: 'below', pct: Math.round((1 - l.price / g[0]) * 100), n: g[1], med: g[0] };
+    }
+    cache.set(l.id, out); return out;
+  };
+  SIG.set(listings, m); return m;
+}

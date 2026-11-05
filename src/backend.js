@@ -35,7 +35,7 @@ export const rowToListing = (r, uid) => ({
   geo: { city: r.city, st: r.st, lat: r.lat, lng: r.lng },
   price: r.price == null ? null : Number(r.price), priceType: r.price_type, f: r.fields || {}, photos: r.photos || [],
   status: r.status, sponsored: !!r.sponsored, createdAt: ts(r.created_at), updatedAt: ts(r.updated_at),
-  history: [{ at: ts(r.created_at), to: r.status }], mine: !!uid && r.owner === uid,
+  history: [{ at: ts(r.created_at), to: r.status }], priceHistory: (r.price_history || []).map((x) => ({ at: ts(x.at), from: Number(x.from), to: Number(x.to) })), mine: !!uid && r.owner === uid,
 });
 
 const listingToRow = (l) => ({

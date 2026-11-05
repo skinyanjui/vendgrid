@@ -385,6 +385,12 @@ export const SEED = [
   L(901, 'machines', 'dm', 'Seaga HY900 Combo — sold last month', 'Evansville, IN', 30, 3300, { machineType: 'Combo', manufacturer: 'Seaga', model: 'HY900', condition: 'Used', payment: 'Cash only', delivery: 'Pickup only' }, 'Sold.', { status: 'sold' }),
   L(902, 'services', 'dm', 'Weekend restocking help', 'Evansville, IN', 17, null, { serviceType: 'Supply / restock', coverage: 40, availability: 'Scheduled', rate: '$25/hr' }, 'Reliable weekend route restocking for small operators.', { status: 'paused' }),
 ];
+// demo price history so the "Price drop" signal has something to show
+for (const [id, daysAgo] of [[102, 2], [103, 4], [202, 3]]) {
+  const l = SEED.find((x) => x.id === id);
+  if (l && l.price) l.priceHistory = [{ at: NOW - daysAgo * D, from: Math.round((l.price * 1.12) / 50) * 50, to: l.price }];
+}
+
 /* Extra detail on the sample listings (seller type, service history, route specifics) */
 const EXTRA = {
   101: { selections: 36, dims: '72 × 39 × 35 in', weight: 650, cardReader: 'Ready, not included', coinMech: 'MDB coin changer', billValidator: '$1/$5, MDB', telemetry: ['MDB', 'DEX', 'Multi-price'], qty: 1, shipsIn: 'Ready now', sellerType: 'Refurbisher', service: 'New coin mech spring 2026. Spirals checked and straightened.', returns: 'Returns if not as described', shipCost: 'Free within 25 mi of Evansville' },

@@ -4,7 +4,7 @@ import { POLICIES, LEGAL } from './legal.js';
 import { INFO, INFO_KEYS, INFO_LABELS, INFO_CTA } from './info.js';
 import { pathToRoute, listingPath } from './seo.js';
 import { TYPES, TYPE_KEYS, CITIES, dist, ORGS, SEED, PRIVATE_SEED, DEMO_ROOMS, TRANSITIONS, STATUS_LABEL, FMT, resolveLocation, suggestLocations, hrefFor, slugify, optionsFor } from './data.js';
-import { PAGE, SORTS, DEFAULT_QUERY, sortOptions, effectiveSort, parseIntent, runSearch, searchFull, suggest, priceText } from './engine.js';
+import { PAGE, SORTS, DEFAULT_QUERY, sortOptions, effectiveSort, parseIntent, runSearch, searchFull, suggest, priceText, priceSignals } from './engine.js';
 import { CSS } from './styles.js';
 import * as api from './backend.js';
 import L from 'leaflet';
@@ -557,13 +557,14 @@ function AreaMap({ l }) {
 
 /* One ListingCard for all four categories; per-type metadata comes from TYPES[type].meta */
 function ListingCard({ l, showType }) {
-  const { orgs, favs, toggleFav, user } = useApp();
+  const { orgs, favs, toggleFav, user, listings } = useApp();
+  const sig = priceSignals(listings)(l);
   const t = TYPES[l.type], org = orgs[l.org], saved = favs.has(l.id);
   const spec = t.meta(l).filter(Boolean).slice(0, 2).join(' · '); // the two facts that decide a first look; the rest is on the detail page
   const isNew = l.status === 'published' && Date.now() - l.createdAt < 3 * 864e5;
   const canAct = l.status === 'published' && !(l.mine && user);
   return (
-    <article className="card">
+    <article className={'card' + (l.sponsored ? ' sponsored' : '')}>
       <div className="thumb">
         {l.photos[0] ? <img src={l.photos[0]} alt="" loading="lazy" /> : <div className="fallback" aria-hidden="true"><span className="g"><Icon n={CAT_ICON[l.type]} size={22} stroke={1.75} /></span>No photo yet</div>}
         {showType && <span className="badge cat">{t.singular}</span>}
@@ -573,7 +574,7 @@ function ListingCard({ l, showType }) {
         <button className="save" aria-pressed={saved} aria-label={saved ? `Remove ${l.title} from saved` : `Save ${l.title}`} onClick={() => toggleFav(l.id)}><span><Icon n="heart" size={16} /></span></button>
       </div>
       <div className="cbody">
-        <div className="cprow"><div className={'cprice' + (/^(\$|From|Call-out|Install)/.test(priceText(l)) ? '' : ' txt')}>{priceText(l)}</div>{isNew && <span className="badge info">New</span>}</div>
+        <div className="cprow"><div className={'cprice' + (/^(\$|From|Call-out|Install)/.test(priceText(l)) ? '' : ' txt')}>{priceText(l)}</div>{sig ? (sig.kind === 'drop' ? <span className="badge ok" title={`Was ${FMT(sig.from)}`}>Price drop</span> : <span className="badge ok" title={`${sig.pct}% below the median of ${sig.n} similar listings`}>Below similar</span>) : isNew && <span className="badge info">New</span>}</div>
         <a className="ctitle" href={hrefFor(l)}>{l.title}</a>
         <div className="cspec" title={spec}>{spec || '\u00a0'}</div>
         <div className="cloc"><Icon n="pin" size={13} /><span>{l.geo.city}, {l.geo.st}</span></div>
@@ -1268,6 +1269,7 @@ function Detail({ route, go }) {
   useEffect(() => { if (l) document.title = `${l.title} · VendGrid`; window.scrollTo(0, 0); }, [route.id]);
   if (!l) return <div className="empty"><h1>That listing is no longer here</h1><p>It may have been removed, or the link has a typo.</p><a className="btn" href="#/">Keep browsing</a></div>;
   const t = TYPES[l.type], org = orgs[l.org];
+  const sigD = priceSignals(listings)(l);
   const own = l.mine && user;
   const open = l.status === 'published';
   const saved = favs.has(l.id);
@@ -1341,6 +1343,7 @@ function Detail({ route, go }) {
         <aside className="panel actionpanel" aria-label="Contact">
           <div className="pv">
             <div className="price-lg">{priceText(l)}</div>
+            {sigD && <div className="pricenote"><span className="badge ok">{sigD.kind === 'drop' ? 'Price drop' : 'Below similar'}</span><span>{sigD.kind === 'drop' ? `Was ${FMT(sigD.from)} · ${sigD.pct}% lower` : `${sigD.pct}% under the median of ${sigD.n} similar listings`}</span></div>}
             {l.priceType === 'negotiable' && <div className="muted">{l.type === 'wanted' ? 'Budget is flexible' : 'Negotiable'}</div>}
             {l.type === 'machines' && <div className="muted extra" style={{ display: undefined }}>{l.f.condition} · {l.geo.city}, {l.geo.st}</div>}
           </div>
@@ -2621,7 +2624,7 @@ export default function App() {
       return job.catch((e) => { liveErr(e); return null; });
     }
     const base = { type: d.type, title: d.title.trim(), desc: d.desc.trim(), geo: { city: geo.city, st: geo.st, lat: geo.lat, lng: geo.lng }, price, priceType: TYPES[d.type].hasPrice ? d.priceType : 'none', f: restF, photos: d.photos, updatedAt: Date.now() };
-    if (editing) { setPriv((p) => ({ ...p, [editing.id]: address || '' })); setListings((ls) => ls.map((x) => (x.id === editing.id ? { ...x, ...base, history: [...x.history, { at: Date.now(), to: 'edited' }] } : x))); notify('Changes saved'); return { ...editing, ...base }; }
+    if (editing) { setPriv((p) => ({ ...p, [editing.id]: address || '' })); setListings((ls) => ls.map((x) => (x.id === editing.id ? { ...x, ...base, history: [...x.history, { at: Date.now(), to: 'edited' }], priceHistory: base.price != null && x.price != null && base.price !== x.price ? [...(x.priceHistory || []), { at: Date.now(), from: x.price, to: base.price }] : x.priceHistory } : x))); notify('Changes saved'); return { ...editing, ...base }; }
     const l = { id: ++nextId.current, org: 'dm', mine: true, status: 'published', sponsored: false, createdAt: Date.now(), history: [{ at: Date.now(), to: 'draft' }, { at: Date.now(), to: 'pending_review' }, { at: Date.now(), to: 'published' }], ...base };
     setListings((ls) => [l, ...ls]);
     if (address) setPriv((p) => ({ ...p, [l.id]: address }));
