@@ -810,7 +810,7 @@ a.u{text-decoration:underline;text-underline-offset:2px}
 
 .cspec{font-size:12px;line-height:16px;color:var(--gray-700);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:16px}
 .cloc{padding-top:2px}
-.cact{margin-top:8px;display:flex;align-items:center;justify-content:center;min-height:32px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;font-weight:500;color:var(--foreground);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:border-color var(--fast) var(--ease),background var(--fast) var(--ease)}
+.cact{margin-top:8px;display:flex;align-items:center;justify-content:center;min-height:32px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius-md);font-size:13px;font-weight:500;color:var(--foreground);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:border-color var(--fast) var(--ease),background var(--fast) var(--ease)}
 .cact:hover{border-color:var(--foreground);background:var(--gray-100)}
 @media(pointer:coarse),(max-width:767px){.cact{min-height:44px}}
 
