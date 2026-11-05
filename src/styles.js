@@ -139,7 +139,6 @@ button.chip:hover{background:var(--gray-200)}
 .bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:0}
 .bar .btn,.bar .select{height:32px;font-size:13px}
 .bar .btn{padding:0 12px}
-.bar .btn.vtoggle.on,.bar .btn.vtoggle.on:hover{background:var(--foreground);color:var(--background);border-color:var(--foreground)}
 @media(max-width:560px){.bar{flex-wrap:nowrap;gap:6px}.bar .grow{display:none}.bar .row2{margin-left:auto}.bar .btn{padding:0 10px}}
 @media(max-width:400px){.flabel{display:none}}
 @media(max-width:767px){.bar .select{font-size:16px}}
@@ -677,7 +676,6 @@ label.btn.disabled{opacity:.6;pointer-events:none}
 .badge.bad{background:color-mix(in srgb,var(--red) 12%,var(--background))}
 .badge.info{color:var(--blue);border-color:var(--blue);background:color-mix(in srgb,var(--blue) 10%,var(--background))}
 .badge.sp,.thumb .badge.sp.onphoto{color:var(--amber);border-color:var(--amber);background:color-mix(in srgb,var(--amber) 14%,var(--background))}
-.vtoggle.on{background:color-mix(in srgb,var(--green) 14%,var(--background));border-color:var(--green);color:var(--green)}
 .sidebar a[aria-current=page]{background:color-mix(in srgb,var(--blue) 12%,var(--background));color:var(--blue)}
 .count,.sidebar [aria-current=page] .count{background:var(--blue);color:var(--on-blue)}
 .tabbar a[aria-current=page]{color:var(--blue)}
@@ -686,4 +684,6 @@ label.btn.disabled{opacity:.6;pointer-events:none}
 a.u{text-decoration:underline;text-underline-offset:2px}
 .themebtn{display:none}
 @media(min-width:768px){.themebtn{display:inline-flex}.menuswitch.mobonly{display:none!important}}
+.switch.mini{width:30px;height:18px}.switch.mini i{width:14px;height:14px;left:2px;top:2px}.switch.mini{pointer-events:none}
+[aria-checked=true]>.switch.mini i{transform:translateX(12px)}
 `;

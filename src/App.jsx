@@ -1014,7 +1014,7 @@ function Browse({ route, go }) {
       </div>
       <div className="bar">
         <button className="btn secondary" aria-label={`Filters${nFilters ? `, ${nFilters} active` : ''}`} onClick={() => setDrawer(true)}><Icon n="sliders" size={16} /><span className="flabel">Filters</span>{nFilters ? <span className="fcount" aria-hidden="true">{nFilters}</span> : null}</button>
-        <button className={'btn secondary vtoggle' + (query.verified ? ' on' : '')} aria-pressed={!!query.verified} onClick={() => set({ ...query, verified: query.verified ? '' : '1', n: 1 })}><Icon n="check" size={14} />Verified</button>
+        <button type="button" role="switch" aria-checked={!!query.verified} className="btn secondary vtoggle" onClick={() => set({ ...query, verified: query.verified ? '' : '1', n: 1 })}>Verified<span className="switch mini" aria-hidden="true"><i /></span></button>
         <span className="grow" />
         <div className="viewtgl" role="radiogroup" aria-label="View">
           <button type="button" role="radio" aria-checked={query.view !== 'map'} aria-label="Grid view" onClick={() => set({ ...query, view: '' })}><Icon n="grid" size={16} /></button>
