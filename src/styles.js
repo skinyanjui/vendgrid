@@ -548,4 +548,19 @@ kbd{font:inherit;font-size:11px;padding:1px 6px;border:1px solid var(--border);b
 .msgpics img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;display:block}
 .msgpics img:only-child{grid-column:span 2;aspect-ratio:4/3}
 @media(max-width:560px){.bar>*{flex:none}.bar>label.row2{flex:1 1 auto;min-width:0}.bar>label.row2 .select{width:100%;min-width:0}.viewtgl button{width:30px}}
+/* OpenStreetMap */
+.osm{position:relative;width:100%;background:var(--gray-100)}
+.osm-map{position:absolute;inset:0;z-index:0}
+.osm .leaflet-container{font:inherit;background:var(--gray-100)}
+.osm-ico{background:none;border:0}
+.osm-pin{display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(255,255,255,.92);border:2px solid #007AFF;color:#0b3d91;font-weight:700;font-size:13px;box-shadow:0 1px 4px rgba(0,0,0,.25);cursor:pointer}
+.osm-pin.on{background:#34C759;border-color:#1f8f3c;color:#fff}
+.osm-pin.dot{background:#007AFF;border-color:#fff}
+.osm-tip{font-size:12px;font-weight:500;padding:2px 6px}
+.areamap .osm{border-bottom:1px solid var(--border)}
+.rmap-frame .osm{border-radius:var(--radius-xl)}
+.leaflet-control-attribution{font-size:10px}
+.osm .leaflet-control-attribution{background:rgba(255,255,255,.9)!important;color:#333}
+.osm .leaflet-control-attribution a{color:#0645ad}
+@media(pointer:coarse),(max-width:767px){.osm .leaflet-bar a{width:44px!important;height:44px!important;line-height:44px!important;font-size:22px!important}}
 `;
