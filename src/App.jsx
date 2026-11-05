@@ -9,10 +9,10 @@ import { CSS } from './styles.js';
 import * as api from './backend.js';
 import L from 'leaflet';
 import LEAFLET_CSS from 'leaflet/dist/leaflet.css';
-import { PanelLeft, Search, MapPin, Heart, Menu, X, Plus, Check, ArrowLeft, Share2, ChevronRight, ChevronLeft, Flag, SlidersHorizontal, Send, User, Package, Route as RouteIcon, Refrigerator, Wrench, ImagePlus, Trash2, Eye, Info, Building2, Sun, Moon, Monitor, Lock, EyeOff, BarChart3, Circle, Cog, BookOpen, AlertTriangle, Megaphone, Map as MapIcon, LayoutGrid, Paperclip, FileText, Clock, ExternalLink, Bell, ArrowUpDown } from 'lucide-react';
+import { PanelLeft, Search, MapPin, Heart, Menu, X, Plus, Check, ArrowLeft, Share2, ChevronRight, ChevronLeft, Flag, SlidersHorizontal, Send, User, Package, Route as RouteIcon, Refrigerator, Wrench, ImagePlus, Trash2, Eye, Info, Building2, Sun, Moon, Monitor, Lock, EyeOff, BarChart3, Circle, Cog, BookOpen, AlertTriangle, Megaphone, Map as MapIcon, LayoutGrid, Paperclip, FileText, Clock, ExternalLink, Bell, ArrowUpDown, Settings as SettingsIcon, CreditCard } from 'lucide-react';
 
 /* ───────────── icons (Lucide) ───────────── */
-const LI = { panel: PanelLeft, sort: ArrowUpDown, search: Search, pin: MapPin, heart: Heart, menu: Menu, x: X, plus: Plus, check: Check, back: ArrowLeft, share: Share2, chev: ChevronRight, left: ChevronLeft, flag: Flag, sliders: SlidersHorizontal, send: Send, user: User, box: Package, route: RouteIcon, machine: Refrigerator, wrench: Wrench, image: ImagePlus, trash: Trash2, eye: Eye, info: Info, building: Building2, sun: Sun, moon: Moon, auto: Monitor, cog: Cog, book: BookOpen, alert: AlertTriangle, megaphone: Megaphone, map: MapIcon, grid: LayoutGrid, clip: Paperclip, lock: Lock, eyeoff: EyeOff, chart: BarChart3, circle: Circle, file: FileText, clock: Clock, ext: ExternalLink, bell: Bell };
+const LI = { settings: SettingsIcon, card: CreditCard, panel: PanelLeft, sort: ArrowUpDown, search: Search, pin: MapPin, heart: Heart, menu: Menu, x: X, plus: Plus, check: Check, back: ArrowLeft, share: Share2, chev: ChevronRight, left: ChevronLeft, flag: Flag, sliders: SlidersHorizontal, send: Send, user: User, box: Package, route: RouteIcon, machine: Refrigerator, wrench: Wrench, image: ImagePlus, trash: Trash2, eye: Eye, info: Info, building: Building2, sun: Sun, moon: Moon, auto: Monitor, cog: Cog, book: BookOpen, alert: AlertTriangle, megaphone: Megaphone, map: MapIcon, grid: LayoutGrid, clip: Paperclip, lock: Lock, eyeoff: EyeOff, chart: BarChart3, circle: Circle, file: FileText, clock: Clock, ext: ExternalLink, bell: Bell };
 const CAT_ICON = { wanted: 'megaphone', machines: 'machine', parts: 'cog', locations: 'building', routes: 'route', services: 'wrench' };
 const Icon = ({ n, size = 20, stroke = 2 }) => { const C = LI[n]; return C ? <C className={'icon i-' + n} size={size} strokeWidth={stroke} aria-hidden="true" style={{ width: size, height: size }} /> : null; };
 
@@ -736,10 +736,15 @@ function SearchBox({ route, go, query }) {
     go(encodeQuery(next));
   };
   const submit = () => { clearTimeout(timer.current); setOpen(false); searchFromText(text); };
+  // "/" jumps to search from anywhere that isn't a text field
+  useEffect(() => {
+    const k = (e) => { if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return; const t = e.target; if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return; const i = wrap.current && wrap.current.querySelector('input'); if (i) { e.preventDefault(); i.focus(); i.select(); } };
+    document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k);
+  }, []);
   return (
     <div className="sbox" ref={wrap} role="search">
       <span className="sicon"><Icon n="search" size={18} /></span>
-      <input className="input" type="search" placeholder={narrow ? "Search listings" : "Search machines, parts, locations, routes, services"} aria-label="Search VendGrid" role="combobox" aria-expanded={open && sugs.length > 0} aria-controls="sug-list" aria-autocomplete="list" aria-activedescendant={idx >= 0 ? 'sug-' + idx : undefined}
+      <input className="input" type="search" placeholder={narrow ? "Search listings" : "Search machines, parts, locations, routes, services"} aria-label="Search VendGrid" aria-keyshortcuts="/" role="combobox" aria-expanded={open && sugs.length > 0} aria-controls="sug-list" aria-autocomplete="list" aria-activedescendant={idx >= 0 ? 'sug-' + idx : undefined}
         value={text} onChange={(e) => { setText(e.target.value); setOpen(true); setIdx(-1); }} onFocus={() => setOpen(true)}
         onKeyDown={(e) => {
           if (e.key === 'ArrowDown') { e.preventDefault(); setIdx((i) => Math.min(sugs.length - 1, i + 1)); }
@@ -747,6 +752,7 @@ function SearchBox({ route, go, query }) {
           else if (e.key === 'Escape') { setOpen(false); setIdx(-1); }
           else if (e.key === 'Enter') { e.preventDefault(); if (idx >= 0 && sugs[idx]) choose(sugs[idx]); else submit(); }
         }} />
+      {!narrow && !text && <kbd className="kbdhint" aria-hidden="true">/</kbd>}
       {open && sugs.length > 0 && (
         <div className="sugg" id="sug-list" role="listbox" aria-label="Suggestions">
           {sugs.map((s, i) => (
@@ -815,19 +821,54 @@ function Header({ route, go }) {
   );
 }
 function Sidebar({ route }) {
-  const { user, unread, prefLoc, noteCount, listings } = useApp();
+  const { user, unread, prefLoc, noteCount, listings, myOrg } = useApp();
   // On a listing page the menu keeps your place: it highlights the category the listing belongs to.
   const cat = route.name === 'browse' ? route.query.cat : route.name === 'listing' ? (listings.find((x) => x.id === route.id) || {}).type || null : null;
-  const link = (c) => encodeQuery({ ...DEFAULT_QUERY, f: {}, cat: c || 'all', loc: route.name === 'browse' ? route.query.loc : prefLoc });
+  const loc = route.name === 'browse' ? route.query.loc : prefLoc;
+  const link = (c, f) => encodeQuery({ ...DEFAULT_QUERY, f: f || {}, cat: c || 'all', loc });
   const cur = (ok) => (ok ? 'page' : undefined);
+  const gate = (h) => (user ? h : '#/login?next=' + enc(h));
+  const [shut, setShut] = useState({}); // chevron toggles; the current category stays open by default
+  const SUBKEY = { machines: 'machineType', parts: 'partType', locations: 'propertyType', routes: 'businessType', services: 'serviceType' }; // the one facet that names what a listing is
+  const subFor = (c) => { const k = SUBKEY[c]; const d = k && TYPES[c].filters.find((f) => f.key === k); const o = d ? optionsFor(c, k).slice(0, 8) : []; return d && o.length > 1 ? { key: k, label: d.label, options: o } : null; };
+  const name = (myOrg && myOrg.name) || (user && user.name) || '';
   return (
     <nav className="sidebar" aria-label="Primary">
-      {NAV.map(([c, label, ic]) => <a key={label} href={link(c)} aria-current={cur(cat === (c || 'all'))}><Icon n={ic} size={18} /><span className="slabel">{label}</span></a>)}
-      <a href={user ? '#/saved' : '#/login?next=' + enc('#/saved')} aria-current={cur(route.name === 'saved')}><Icon n="heart" size={18} /><span className="slabel">Saved</span></a>
-      <a href={user ? '#/messages' : '#/login?next=' + enc('#/messages')} aria-current={cur(route.name === 'messages')}><Icon n="send" size={18} /><span className="slabel">Messages</span>{unread > 0 && <span className="count" aria-label={`${unread} unread`}>{unread}</span>}</a>
-      <a href={user ? '#/my-listings' : '#/login?next=' + enc('#/my-listings')} aria-current={cur(route.name === 'mine')}><Icon n="box" size={18} /><span className="slabel">My Listings</span></a>
-      {user && <a href="#/activity" aria-current={cur(route.name === 'activity')}><Icon n="bell" size={18} /><span className="slabel">Activity</span>{noteCount > 0 && <span className="count" aria-label={`${noteCount} new`}>{noteCount}</span>}</a>}
-      {!user && <a href="#/login"><Icon n="user" size={18} /><span className="slabel">Sign in</span></a>}
+      <div className="sgroup" role="group" aria-labelledby="sg-browse">
+        <h2 id="sg-browse" className="shead">Browse</h2>
+        {NAV.map(([c, label, ic]) => {
+          const sub = subFor(c), isCur = cat === (c || 'all'), open = !!sub && (shut[c] === undefined ? isCur && route.name === 'browse' && !!(route.query.f && route.query.f[sub.key]) : !shut[c]); // closed until you ask, or until you've picked one of its options
+          return (
+            <div key={label} className="sitem">
+              <a href={link(c)} aria-current={cur(isCur && !(route.name === 'browse' && sub && route.query.f && route.query.f[sub.key]))}><Icon n={ic} size={18} /><span className="slabel">{label}</span></a>
+              {sub && <button className={'sx' + (open ? ' open' : '')} aria-expanded={open} aria-label={`${label} by ${sub.label.toLowerCase()}`} onClick={() => setShut((x) => ({ ...x, [c]: open }))}><Icon n="chev" size={16} /></button>}
+              {open && <div className="ssub" role="group" aria-label={`${label} by ${sub.label.toLowerCase()}`}>
+                {sub.options.map((o) => <a key={o} href={link(c, { [sub.key]: o })} aria-current={cur(route.name === 'browse' && isCur && route.query.f && route.query.f[sub.key] === o)}>{o}</a>)}
+              </div>}
+            </div>
+          );
+        })}
+      </div>
+      <div className="sgroup" role="group" aria-labelledby="sg-yours">
+        <h2 id="sg-yours" className="shead">Yours</h2>
+        <a href={gate('#/saved')} aria-current={cur(route.name === 'saved')}><Icon n="heart" size={18} /><span className="slabel">Saved</span></a>
+        <a href={gate('#/messages')} aria-current={cur(route.name === 'messages')}><Icon n="send" size={18} /><span className="slabel">Messages</span>{unread > 0 && <span className="count" aria-label={`${unread} unread`}>{unread > 9 ? '9+' : unread}</span>}</a>
+        <a href={gate('#/my-listings')} aria-current={cur(route.name === 'mine')}><Icon n="box" size={18} /><span className="slabel">My Listings</span></a>
+      </div>
+      <div className="sgroup sbottom" role="group" aria-label="Account and help">
+        {user && <a href="#/settings" aria-current={cur(route.name === 'settings')}><Icon n="settings" size={18} /><span className="slabel">Settings</span></a>}
+        {user && <a href="#/billing" aria-current={cur(route.name === 'billing')}><Icon n="card" size={18} /><span className="slabel">Billing</span></a>}
+        <a href="#/guide" aria-current={cur(route.name === 'guide')}><Icon n="book" size={18} /><span className="slabel">Buyer’s guide</span></a>
+        {user ? (
+          <div className="sacct">
+            <a className="sacct-main" href="#/account" aria-current={cur(route.name === 'account')} title={name}>
+              <span className="avatar" aria-hidden="true">{(name || '?').trim().charAt(0).toUpperCase()}</span>
+              <span className="slabel sname"><span className="sntxt">{name}</span>{myOrg && myOrg.verified && <span className="vbadge" role="img" aria-label="Verified business" title="Verified business"><Icon n="check" size={12} /></span>}</span>
+            </a>
+            <a className="sacct-bell" href="#/activity" aria-current={cur(route.name === 'activity')} aria-label={noteCount > 0 ? `Activity, ${noteCount} new` : 'Activity'} title="Activity"><Icon n="bell" size={18} />{noteCount > 0 && <span className="ndot" aria-hidden="true" />}</a>
+          </div>
+        ) : <a className="btn sm sbtn" href="#/login"><Icon n="user" size={16} /><span className="slabel">Sign in</span></a>}
+      </div>
     </nav>
   );
 }
@@ -1225,6 +1266,7 @@ function Browse({ route, go }) {
       {tokens.length > 0 && (
         <div className="tokens" aria-label="Active filters">
           {tokens.map(([l, rm], i) => <Token key={l + i} label={l} onRemove={rm} />)}
+          <button className="btn ghost sm addf" onClick={() => setDrawer(true)}><Icon n="plus" size={14} />Add filter</button>
           {tokens.length > 1 && <button className="btn ghost sm" onClick={clearAll}>Clear all</button>}
         </div>
       )}

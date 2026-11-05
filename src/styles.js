@@ -858,4 +858,51 @@ a.u{text-decoration:underline;text-underline-offset:2px}
 .card.sponsored{border-color:color-mix(in srgb,var(--amber) 42%,var(--border))}
 .card.sponsored:hover,.card.sponsored:focus-within{border-color:color-mix(in srgb,var(--amber) 70%,var(--border))}
 
+/* grouped sidebar: Browse, Yours, then account and help pinned to the bottom */
+.sgroup{display:flex;flex-direction:column;gap:2px}
+.sgroup+.sgroup{margin-top:12px}
+.shead{margin:0;padding:4px 12px;font-size:12px;line-height:16px;font-weight:500;letter-spacing:.02em;color:var(--text-muted)}
+.sidebar .sbottom{margin-top:auto;padding-top:12px;border-top:1px solid var(--border)}
+.sitem{position:relative;display:flex;flex-direction:column}
+.sx{position:absolute;right:4px;top:4px;width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:var(--radius-md);background:transparent;color:var(--text-muted);cursor:pointer}
+.sx:hover{background:var(--gray-200);color:var(--foreground)}
+.sx .icon{transition:transform var(--fast) var(--ease)}.sx.open .icon{transform:rotate(90deg)}
+.sidebar .ssub{display:flex;flex-direction:column;margin:2px 0 4px 21px;padding-left:8px;border-left:1px solid var(--border)}
+.sidebar .ssub a{height:32px;padding:0 12px;font-size:13px;font-weight:400;color:var(--text-muted)}
+.sidebar .ssub a[aria-current=page]{font-weight:500}
+.sacct{display:flex;align-items:center;gap:2px;margin-top:4px}
+.sidebar .sacct-main{flex:1;min-width:0;padding:0 8px;gap:10px}
+.sidebar .sacct-bell{position:relative;flex:none;width:40px;justify-content:center;padding:0}
+.ndot{position:absolute;top:9px;right:10px;width:8px;height:8px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 2px var(--background)}
+.avatar{flex:none;width:24px;height:24px;border-radius:50%;background:var(--gray-200);color:var(--foreground);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:600}
+.sname{min-width:0;display:inline-flex;align-items:center;gap:6px;overflow:hidden;white-space:nowrap}
+.sname .vbadge{flex:none}
+.sidebar .sbtn{height:40px;justify-content:center;background:var(--foreground);color:var(--background);border-radius:var(--radius-md);margin-top:4px}
+.sidebar .sbtn:hover{background:var(--gray-800);color:var(--background)}
+.kbdhint{position:absolute;right:12px;top:50%;transform:translateY(-50%);pointer-events:none}
+.sbox:focus-within .kbdhint{display:none}
+@media(pointer:coarse){.kbdhint{display:none}}
+/* applied filters: dashed outline pills; they fill in on hover */
+.tokens .chip{background:transparent;border:1px dashed var(--gray-400)}
+.tokens .chip:hover{border-style:solid;background:var(--gray-100)}
+.tokens .addf{border:1px solid transparent}
+/* tablet icon rail: only icons, no headings, sub-lists or chevrons */
+@media(min-width:768px) and (max-width:1023px){
+  .shead,.sx,.ssub,.sname{display:none}
+  .sgroup{align-items:center}.sgroup+.sgroup{margin-top:8px}
+  .sidebar .sbottom{width:48px}
+  .sacct{flex-direction:column}
+  .sidebar .sacct-main,.sidebar .sacct-bell{width:48px;padding:0}
+  .ndot{right:12px}
+  .sidebar .sbtn{width:48px}
+}
+
+.sname .vbadge{position:static;width:16px;height:16px;opacity:1}
+
+.sidebar .sgroup,.sidebar .sitem,.sidebar a,.sidebar .sacct{flex-shrink:0}
+.sidebar .sbottom{position:sticky;bottom:-16px;background:var(--background);padding-bottom:16px;z-index:1}
+.sx{top:4px}
+
+.sname .sntxt{min-width:0;overflow:hidden;text-overflow:ellipsis}
+
 `;
