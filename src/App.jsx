@@ -396,7 +396,6 @@ function CityRow({ items, query, set }) {
   if (rows.length < 2 || query.loc) return null;
   return (
     <div className="cityrow" aria-label="Browse by city">
-      <span className="muted">{items.length} {query.cat === 'all' ? 'listings' : TYPES[query.cat].label.toLowerCase()} in {Object.keys(counts).length} cities</span>
       <div className="cities">{rows.map(([c, n]) => <button key={c} className="chip" onClick={() => set({ ...query, loc: c, r: '', n: 1 })}>{c.split(',')[0]} <span className="muted">{n}</span></button>)}</div>
     </div>
   );
@@ -1025,6 +1024,7 @@ function Browse({ route, go }) {
             {sorts.map((s) => <option key={s} value={s}>{SORTS[s]}</option>)}
           </select>
         </label>
+        <button className="btn secondary savebtn" disabled={savedAlready} onClick={() => (user ? saveSearch(query) : requireAuth({ type: 'saveSearch', query }, go))}>{savedAlready ? 'Search saved' : 'Save search'}</button>
       </div>
       </div>
       {tokens.length > 0 && (
@@ -1033,10 +1033,9 @@ function Browse({ route, go }) {
           {tokens.length > 1 && <button className="btn ghost sm" onClick={clearAll}>Clear all</button>}
         </div>
       )}
-      {state.status !== 'loading' && <CityRow items={mapItems} query={query} set={set} />}
+      {state.status !== 'loading' && query.view !== 'map' && <CityRow items={mapItems} query={query} set={set} />}
       <div className="ctx" role="status" aria-live="polite">
         <span><b>{label}</b>{query.loc ? ` · ${query.loc}` : <span className="nophone"> · Nationwide</span>}{state.status !== 'loading' && state.status !== 'error' ? ` · ${state.total} ${state.total === 1 ? 'result' : 'results'}` : ''}</span>
-        <button className="btn ghost sm" disabled={savedAlready} onClick={() => (user ? saveSearch(query) : requireAuth({ type: 'saveSearch', query }, go))}>{savedAlready ? 'Search saved' : 'Save search'}</button>
       </div>
 
       {state.status === 'error' ? (

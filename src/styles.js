@@ -654,4 +654,6 @@ label.btn.disabled{opacity:.6;pointer-events:none}
 @media(pointer:coarse),(max-width:767px){.bar .viewtgl{height:44px}.bar .viewtgl button{width:40px}}
 @media(max-width:560px){.bar .viewtgl button{width:38px}}
 
+.bar .savebtn{white-space:nowrap}
+@media(max-width:560px){.bar{flex-wrap:wrap}}
 `;
