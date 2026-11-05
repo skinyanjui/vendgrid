@@ -490,14 +490,20 @@ function RouteFinancials({ l }) {
 }
 
 /* VendPlacer-style "browse by city": real counts for the current category, one tap to filter */
-function CityRow({ items, query, set }) {
+const cityRows = (items, query) => {
   const counts = {};
   items.forEach((l) => { const k = `${l.geo.city}, ${l.geo.st}`; counts[k] = (counts[k] || 0) + 1; });
   const rows = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10);
-  if (rows.length < 2 || query.loc) return null;
+  return rows.length < 2 || query.loc ? [] : rows;
+};
+function CityRow({ rows, total, query, set }) {
+  if (!rows.length) return null;
   return (
     <div className="cityrow" aria-label="Browse by city">
-      <div className="cities">{rows.map(([c, n]) => <button key={c} className="chip" onClick={() => set({ ...query, loc: c, r: '', n: 1 })}>{c.split(',')[0]} <span className="muted">{n}</span></button>)}</div>
+      <div className="cities">
+        <button className="chip on" aria-pressed="true" onClick={() => set({ ...query, loc: '', r: '', n: 1 })}>All <span className="muted">{total}</span></button>
+        {rows.map(([c, n]) => <button key={c} className="chip" onClick={() => set({ ...query, loc: c, r: '', n: 1 })}>{c.split(',')[0]} <span className="muted">{n}</span></button>)}
+      </div>
     </div>
   );
 }
@@ -1242,10 +1248,11 @@ function Browse({ route, go }) {
   const label = query.cat === 'all' ? 'All listings' : TYPES[query.cat].label;
   const savedAlready = searches.some((s) => s.href === encodeQuery({ ...query, n: 1 }));
 
+  const cRows = cityRows(mapItems, query), showCities = state.status !== 'loading' && query.view !== 'map' && cRows.length > 0;
   return (
     <>
       <h1 className="sr">{label}{query.q ? ` matching “${query.q}”` : ''}{query.loc ? ` near ${query.loc}` : ''}</h1>
-      {state.status !== 'loading' && query.view !== 'map' && <CityRow items={mapItems} query={query} set={set} />}
+      {showCities && <CityRow rows={cRows} total={mapItems.length} query={query} set={set} />}
       <div className="toprow">
       <div className="chips" role="tablist" aria-label="Category">
         {['all', ...TYPE_KEYS].map((c) => (
@@ -1275,7 +1282,7 @@ function Browse({ route, go }) {
           {tokens.length > 1 && <button className="btn ghost sm" onClick={clearAll}>Clear all</button>}
         </div>
       )}
-      <div className="ctx" role="status" aria-live="polite">
+      <div className={'ctx' + (showCities ? ' quiet' : '')} role="status" aria-live="polite">
         <span><b>{label}</b>{query.loc ? ` · ${query.loc}` : <span className="nophone"> · Nationwide</span>}{state.status !== 'loading' && state.status !== 'error' ? ` · ${state.total} ${state.total === 1 ? 'result' : 'results'}` : ''}</span>
         <button className="btn ghost sm savectx" disabled={savedAlready} onClick={() => (user ? saveSearch(query) : requireAuth({ type: 'saveSearch', query }, go))}>{savedAlready ? 'Search saved' : 'Save search'}</button>
       </div>

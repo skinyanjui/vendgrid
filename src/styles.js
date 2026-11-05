@@ -918,4 +918,9 @@ a.u{text-decoration:underline;text-underline-offset:2px}
   .sfoot span{margin-top:8px;padding-bottom:4px}
 }
 
+/* where the city row carries the "All N" total, the separate results line is read aloud but not shown (wide screens) */
+@media(min-width:768px){.ctx.quiet{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;padding:0}}
+
+.cities .chip.on .muted{color:inherit;opacity:.9}
+
 `;
