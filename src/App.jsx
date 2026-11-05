@@ -807,8 +807,9 @@ function Header({ route, go }) {
   );
 }
 function Sidebar({ route }) {
-  const { user, unread, prefLoc, noteCount } = useApp();
-  const cat = route.name === 'browse' ? route.query.cat : null;
+  const { user, unread, prefLoc, noteCount, listings } = useApp();
+  // On a listing page the menu keeps your place: it highlights the category the listing belongs to.
+  const cat = route.name === 'browse' ? route.query.cat : route.name === 'listing' ? (listings.find((x) => x.id === route.id) || {}).type || null : null;
   const link = (c) => encodeQuery({ ...DEFAULT_QUERY, f: {}, cat: c || 'all', loc: route.name === 'browse' ? route.query.loc : prefLoc });
   const cur = (ok) => (ok ? 'page' : undefined);
   return (
