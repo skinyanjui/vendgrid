@@ -2214,8 +2214,10 @@ function AuthShell({ children }) {
       <aside className="authaside" aria-label="VendGrid today">
         <AuthBrand />
         <div className="authpitch">
-          <p className="authkick">VendGrid today</p>
-          <div className="authbig"><b>{pub.length}</b><span>live listings across {kinds} categories</span></div>
+          <div className="authhero">
+            <img src="img/svc-install.jpg" alt="" />
+            <div className="authbig"><p className="authkick">VendGrid today</p><b>{pub.length}</b><span>live listings across {kinds} categories</span></div>
+          </div>
           <dl className="authtiles">{tiles.map(([n, l]) => <div key={l}><dt>{n}</dt><dd>{l}</dd></div>)}</dl>
           {recent.length > 0 && (
             <div className="authrecent">

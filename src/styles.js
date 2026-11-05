@@ -990,4 +990,16 @@ a.u{text-decoration:underline;text-underline-offset:2px}
 @media(min-width:768px) and (max-height:620px){.authtiles{display:none}}
 @media(min-width:768px) and (max-width:1023px){.authbig b{font-size:56px;line-height:56px}.authtiles dt{font-size:22px;line-height:28px}.authtiles div{padding:10px 12px}}
 
+/* hero photo: the number sits on the picture */
+.authhero{position:relative;border-radius:var(--radius-xl);overflow:hidden;aspect-ratio:16/9;background:#1a1a1a;color:#fff}
+.authhero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 35%}
+.authhero::after{content:"";position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.78) 0%,rgba(0,0,0,.35) 45%,rgba(0,0,0,0) 75%)}
+.authhero .authbig{position:absolute;left:20px;right:20px;bottom:16px;z-index:1}
+.authhero .authkick,.authhero .authbig span{color:#fff}
+.authhero .authkick{opacity:.85;margin-bottom:4px}
+.authhero .authbig b{font-size:64px;line-height:64px}
+@media(min-width:768px) and (max-height:959px){.authrecent{display:none}}
+@media(min-width:768px) and (max-height:700px){.authhero{aspect-ratio:21/9}.authhero .authbig b{font-size:48px;line-height:48px}}
+@media(min-width:768px) and (max-width:1023px){.authhero .authbig b{font-size:48px;line-height:48px}.authhero .authbig{left:14px;right:14px;bottom:12px}}
+
 `;
