@@ -557,9 +557,10 @@ function AreaMap({ l }) {
 
 /* One ListingCard for all four categories; per-type metadata comes from TYPES[type].meta */
 function ListingCard({ l, showType }) {
-  const { orgs, favs, toggleFav } = useApp();
+  const { orgs, favs, toggleFav, user } = useApp();
   const t = TYPES[l.type], org = orgs[l.org], saved = favs.has(l.id);
-  const fact = t.meta(l).filter(Boolean)[0]; // one key fact; everything else is on the detail page
+  const spec = t.meta(l).filter(Boolean).slice(0, 2).join(' · '); // the two facts that decide a first look; the rest is on the detail page
+  const canAct = l.status === 'published' && !(l.mine && user);
   return (
     <article className="card">
       <div className="thumb">
@@ -573,7 +574,9 @@ function ListingCard({ l, showType }) {
       <div className="cbody">
         <div className={'cprice' + (/^(\$|From|Call-out|Install)/.test(priceText(l)) ? '' : ' txt')}>{priceText(l)}</div>
         <a className="ctitle" href={hrefFor(l)}>{l.title}</a>
-        <div className="cloc"><Icon n="pin" size={13} /><span>{l.geo.city}, {l.geo.st}{fact ? ` · ${fact}` : ''}</span></div>
+        <div className="cspec" title={spec}>{spec || '\u00a0'}</div>
+        <div className="cloc"><Icon n="pin" size={13} /><span>{l.geo.city}, {l.geo.st}</span></div>
+        {canAct && <a className="cact" href={`#/listing/${l.id}/inquire`} aria-label={`${t.action}: ${l.title}`}>{t.action}</a>}
       </div>
     </article>
   );
@@ -842,7 +845,7 @@ function TabBar({ route }) {
     ['browse', 'Explore', 'search', encodeQuery({ ...DEFAULT_QUERY, f: {}, loc: prefLoc })],
     ['saved', 'Saved', 'heart', gate('#/saved')],
     ['messages', 'Messages', 'send', gate('#/messages')],
-    ['mine', 'Listings', 'box', gate('#/my-listings')],
+    ['post', 'Post', 'plus', '#/post'],
     ['account', 'Account', 'user', '#/account'],
   ];
   return (
@@ -980,6 +983,7 @@ function Account({ go }) {
       </div>
       <h2 className="sech">Selling</h2>
       <div className="list">
+ <Row to="#/my-listings" title="My listings" sub="Manage, edit and withdraw" />
         {user && <Row to="#/activity" title="Activity" sub={noteCount ? `${noteCount} new` : 'Document requests, verification and listing updates'} />}
         <Row to="#/post" title="Post a listing" sub="Free for standard listings" />
         {user && <Row to="#/billing" title="Billing" sub="Plan, sponsored placements, invoices" />}
