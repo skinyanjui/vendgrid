@@ -302,6 +302,7 @@ function PinCard({ group, anchor, sheet, pinned, onClose, onEnter, onLeave, show
 }
 
 function ResultsMap({ items, showType }) {
+  const { navOpen, setNavOpen } = useApp();
   const groups = useMemo(() => {
     const m = {};
     items.forEach((l) => { const k = l.geo.city + ', ' + l.geo.st; (m[k] ??= { key: k, city: l.geo.city, lat: l.geo.lat, lng: l.geo.lng, items: [] }).items.push(l); });
@@ -332,6 +333,7 @@ function ResultsMap({ items, showType }) {
   return (
     <div className="rmap">
       <div className="rmap-frame">
+        <button type="button" className="mapfs" aria-pressed={!navOpen} onClick={() => setNavOpen(!navOpen)}><Icon n="panel" size={16} />{navOpen ? 'Full screen' : 'Exit full screen'}</button>
         <ClusterMap label={`Map of ${items.length} listings across ${groups.length} cities`} height={narrow ? 'min(66vh, 520px)' : 'min(72vh, 680px)'} selected={pin} onPick={choose} onHover={hover} onView={setView} apiRef={api} points={pts}
           fallback={<svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Map of ${items.length} listings across ${groups.length} cities`}>
           <rect width={W} height={H} className="am-bg" />

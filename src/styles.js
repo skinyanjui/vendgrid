@@ -749,4 +749,12 @@ a.u{text-decoration:underline;text-underline-offset:2px}
   .layout.navoff .main{max-width:none;padding-left:16px;padding-right:16px}
 }
 
+.btn.secondary.vtoggle{border-color:transparent;background:transparent;padding:0 8px}
+.btn.secondary.vtoggle:hover{background:var(--gray-100)}
+.mapfs{display:none}
+@media(min-width:768px){
+  .mapfs{display:inline-flex;align-items:center;gap:8px;position:absolute;top:10px;right:10px;z-index:900;height:36px;padding:0 12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--background);color:var(--foreground);font:inherit;font-weight:500;cursor:pointer;box-shadow:var(--shadow-sm,0 1px 2px rgba(0,0,0,.12))}
+  .mapfs:hover{background:var(--gray-100)}
+}
+
 `;
