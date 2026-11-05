@@ -1821,8 +1821,17 @@ function Business({ route }) {
   );
 }
 
+/* A sign-in can finish in another tab or app, so what the person was doing waits in localStorage for up to an hour. */
+const PEND = 'vgPending';
+const safeNext = (n) => (typeof n === 'string' && /^#\/[^\s]*$/.test(n) ? n : '');
+const keepPending = (a, next) => { try { localStorage.setItem(PEND, JSON.stringify({ a: a || null, next: safeNext(next), t: Date.now() })); } catch (e) { /* storage blocked */ } };
+const takePending = () => { try { const r = JSON.parse(localStorage.getItem(PEND) || 'null'); localStorage.removeItem(PEND); return r && Date.now() - r.t < 36e5 ? r : null; } catch (e) { return null; } };
+const MAIL_APPS = { 'gmail.com': ['Gmail', 'https://mail.google.com/'], 'googlemail.com': ['Gmail', 'https://mail.google.com/'], 'outlook.com': ['Outlook', 'https://outlook.live.com/mail/'], 'hotmail.com': ['Outlook', 'https://outlook.live.com/mail/'], 'live.com': ['Outlook', 'https://outlook.live.com/mail/'], 'yahoo.com': ['Yahoo Mail', 'https://mail.yahoo.com/'], 'icloud.com': ['iCloud Mail', 'https://www.icloud.com/mail'], 'me.com': ['iCloud Mail', 'https://www.icloud.com/mail'], 'proton.me': ['Proton Mail', 'https://mail.proton.me/'], 'protonmail.com': ['Proton Mail', 'https://mail.proton.me/'] };
+const TYPOS = { 'gmial.com': 'gmail.com', 'gmai.com': 'gmail.com', 'gmail.co': 'gmail.com', 'gmail.con': 'gmail.com', 'gamil.com': 'gmail.com', 'hotmial.com': 'hotmail.com', 'hotmail.con': 'hotmail.com', 'outlok.com': 'outlook.com', 'outlook.con': 'outlook.com', 'yaho.com': 'yahoo.com', 'yahoo.con': 'yahoo.com', 'icloud.con': 'icloud.com' };
+const emailTypo = (e) => { const [u, d] = e.trim().toLowerCase().split('@'); return d && TYPOS[d] ? `${u}@${TYPOS[d]}` : ''; };
+
 function Login({ route, go }) {
-  const { signIn, live, sendMagicLink, user } = useApp();
+  const { signIn, live, sendMagicLink, user, authFail } = useApp();
   const [email, setEmail] = useState('');
   const [err, setErr] = useState('');
   const [sent, setSent] = useState(false);
@@ -1830,7 +1839,7 @@ function Login({ route, go }) {
   const [wait, setWait] = useState(0);
   useEffect(() => { if (wait <= 0) return; const t = setTimeout(() => setWait(wait - 1), 1000); return () => clearTimeout(t); }, [wait]);
   const linkErr = useMemo(() => { try { const h = new URLSearchParams((location.hash || '').replace(/^#\/?/, '').replace(/^[^&=]*(?=&)/, '')); const q = new URLSearchParams(location.search); return h.get('error_description') || q.get('error_description') || ''; } catch (e) { return ''; } }, []);
-  const send = async () => { setBusy(true); setErr(''); try { await sendMagicLink(email.trim()); setSent(true); setWait(30); } catch (x) { setErr(/rate|seconds|too many/i.test(x.message) ? 'Too many links requested. Wait a minute and try again.' : 'We couldn’t send the link. Try again in a moment.'); } setBusy(false); };
+  const send = async () => { setBusy(true); setErr(''); try { await sendMagicLink(email.trim().toLowerCase(), route.next); setSent(true); setWait(30); } catch (x) { setErr(/rate|seconds|too many/i.test(x.message) ? 'Too many links requested. Wait a minute and try again.' : 'We couldn’t send the link. Try again in a moment.'); } setBusy(false); };
   if (live) {
     if (user) return <div className="page" style={{ maxWidth: 420, margin: '0 auto' }}><h1>You’re signed in</h1><p className="muted" style={{ margin: 0 }}>{user.email}</p><a className="btn" href={route.next || '#/'}>Continue</a></div>;
     if (sent) return (
@@ -1839,6 +1848,7 @@ function Login({ route, go }) {
         <h1>Check your email</h1>
         <p style={{ margin: 0 }}>We sent a sign-in link to <b>{email}</b>. Open it on this device to finish signing in.</p>
         <p className="muted" style={{ margin: 0 }}>It can take a minute. Check your spam folder too. The link works once and expires in an hour.</p>
+        {MAIL_APPS[email.trim().toLowerCase().split('@')[1]] && <a className="btn secondary" href={MAIL_APPS[email.trim().toLowerCase().split('@')[1]][1]} target="_blank" rel="noopener noreferrer"><Icon n="ext" size={16} />Open {MAIL_APPS[email.trim().toLowerCase().split('@')[1]][0]}</a>}
         <div className="row2" style={{ flexWrap: 'wrap' }}>
           <button className="btn secondary" disabled={wait > 0 || busy} onClick={send}>{busy ? 'Sending…' : wait > 0 ? `Send again in ${wait}s` : 'Send again'}</button>
           <button className="btn ghost" onClick={() => { setSent(false); setErr(''); }}>Use a different email</button>
@@ -1849,8 +1859,10 @@ function Login({ route, go }) {
     return (
       <form className="page" style={{ maxWidth: 420, margin: '0 auto' }} noValidate onSubmit={(e) => { e.preventDefault(); if (!/^\S+@\S+\.\S+$/.test(email)) { setErr('That email doesn’t look right. Try name@example.com.'); return; } send(); }}>
         <div><h1>Welcome to VendGrid</h1><p className="muted" style={{ margin: '4px 0 0' }}>Browse freely. Sign in when you’re ready to save, message or post.</p></div>
+        {authFail && !linkErr && !err && <div className="alert" role="alert"><span>That link couldn’t sign you in here. Links only work in the browser where you asked for them, and only once. Enter your email to get a new one, then open it in this browser.</span></div>}
         {linkErr && !err && <div className="alert" role="alert"><span>{/expired|invalid/i.test(linkErr) ? 'That sign-in link expired or was already used. Enter your email for a new one.' : linkErr.replace(/\+/g, ' ')}</span></div>}
         <Field id="em" label="Email" error={err}><input id="em" className={'input full' + (err ? ' bad' : '')} type="email" autoComplete="email" inputMode="email" autoFocus value={email} onChange={(e) => { setEmail(e.target.value); setErr(''); }} /></Field>
+        {emailTypo(email) && <p className="muted" style={{ margin: 0 }} role="status">Did you mean <button type="button" className="linkbtn" onClick={() => { setEmail(emailTypo(email)); setErr(''); }}>{emailTypo(email)}</button>?</p>}
         <button className="btn block" disabled={busy}>{busy ? 'Sending…' : 'Email me a sign-in link'}</button>
         <p className="muted iconline" style={{ fontSize: 12 }}><Icon n="lock" size={14} />No password needed. The link signs you in on this device.</p>
       </form>
@@ -1931,6 +1943,8 @@ export default function App() {
   const blobs = useRef({});
   const seenImpr = useRef(new Set());
   const pending = useRef(null);
+  const hadCode = useRef(false);
+  const [authFail, setAuthFail] = useState(false);
   const stack = useRef([bootAddr()]);
   const toastT = useRef(null);
   const nextId = useRef(Math.max(1000, ...listings.map((l) => (typeof l.id === 'number' ? l.id : 0))));
@@ -1987,10 +2001,14 @@ export default function App() {
     await refreshConvs(u.id, c);
     api.loadNotes().then(setLiveNotes).catch(() => {});
     api.loadStats().then(setLiveStats).catch(() => {});
-    const p = pending.current; pending.current = null;
+    const stored = takePending();
+    const p = pending.current || (stored && stored.a) || null; pending.current = null;
+    const back = (stored && stored.next) || (p && p.next) || '';
     if (p && p.type === 'save') { setLiveFavs((f) => new Set(f).add(p.id)); api.addFav(u.id, p.id).catch(liveErr); }
     if (p && p.type === 'saveSearch') saveSearch(p.query, true);
-    if (p && p.type === 'go') go(p.href, true); else if (stack.current[stack.current.length - 1].startsWith('#/login')) go('#/', true);
+    const top = stack.current[stack.current.length - 1] || '#/';
+    if (p && p.type === 'go') go(p.href, true); else if (top.startsWith('#/login')) go(back || '#/', true); else if (back && top === '#/' && stored) go(back, true);
+    if (hadCode.current) { hadCode.current = false; notify(`Signed in as ${u.email}`); }
   };
   useEffect(() => {
     let off = null, alive = true;
@@ -1998,7 +2016,10 @@ export default function App() {
       if (!alive) return;
       if (!ok) { setMode('demo'); return; }
       try {
+        const cameWithCode = new URL(location.href).searchParams.has('code');
+        hadCode.current = cameWithCode;
         const { data } = await api.sb().auth.getSession();
+        if (cameWithCode && !data.session) { hadCode.current = false; setAuthFail(true); if (!location.hash || location.hash === '#' || location.hash === '#/') go('#/login', true); }
         await onSession(data.session);
         try { const u = new URL(location.href); if (u.searchParams.has('code')) { u.searchParams.delete('code'); history.replaceState(null, '', u.pathname + u.search + u.hash); } } catch (e) { /* ignore */ }
         setMode('live');
@@ -2017,9 +2038,11 @@ export default function App() {
   const requireAuth = (action, goFn, silent) => {
     pending.current = action;
     const here = action.type === 'go' ? action.href : stack.current[stack.current.length - 1] || '#/';
+    keepPending(action, here);
     goFn(`#/login?next=${enc(here)}`, !!silent);
   };
-  const sendMagicLink = async (email) => {
+  const sendMagicLink = async (email, next) => {
+    if (!pending.current && safeNext(next)) keepPending(null, next);
     const { error } = await api.sb().auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
     if (error) throw error;
   };
@@ -2222,7 +2245,7 @@ export default function App() {
     const h = (e) => { const el = e.target.closest && e.target.closest('a[href^="#/"]'); if (!el || e.defaultPrevented || e.metaKey || e.ctrlKey || e.button) return; e.preventDefault(); go(el.getAttribute('href')); };
     document.addEventListener('click', h); return () => document.removeEventListener('click', h);
   }, [go]);
-  const ctx = { themeSel, seeSearch, listings: allListings, priv, metrics, impr, tickets: live ? liveTickets : tickets, track, trackImpr, addTicket, isPro, isAdmin, plan, stats: liveStats, promos: promosView, changeEmail, signOutAll, exportData, deleteData, notes, noteCount, markNotesRead, verif: verifView, verifQueue, openVerifDoc, myOrg, saveOrg, room, closeTicket, reports: live ? liveReports : reports, events, invoices, audit, views, subscribe, cancelPlan, promote, cancelPromo, confirmPayment, processEvent, submitVerif, decideVerif, decideReport, bumpView, orgs, user: curUser, favs: curFavs, searches: curSearches, convs: curConvs, live, mode, sendMagicLink, drafts, prefLoc, setPrefLoc, theme, setTheme, unread, notify, requireAuth, signIn, signOut, toggleFav, saveSearch, removeSearch, searchFromText, startInquiry, sendMsg, markRead, setConvStatus, blockConv, report, setStatus, publish, setDraft };
+  const ctx = { authFail, themeSel, seeSearch, listings: allListings, priv, metrics, impr, tickets: live ? liveTickets : tickets, track, trackImpr, addTicket, isPro, isAdmin, plan, stats: liveStats, promos: promosView, changeEmail, signOutAll, exportData, deleteData, notes, noteCount, markNotesRead, verif: verifView, verifQueue, openVerifDoc, myOrg, saveOrg, room, closeTicket, reports: live ? liveReports : reports, events, invoices, audit, views, subscribe, cancelPlan, promote, cancelPromo, confirmPayment, processEvent, submitVerif, decideVerif, decideReport, bumpView, orgs, user: curUser, favs: curFavs, searches: curSearches, convs: curConvs, live, mode, sendMagicLink, drafts, prefLoc, setPrefLoc, theme, setTheme, unread, notify, requireAuth, signIn, signOut, toggleFav, saveSearch, removeSearch, searchFromText, startInquiry, sendMsg, markRead, setConvStatus, blockConv, report, setStatus, publish, setDraft };
 
   let view;
   switch (route.name) {
