@@ -1944,6 +1944,8 @@ export default function App() {
   const seenImpr = useRef(new Set());
   const pending = useRef(null);
   const hadCode = useRef(false);
+  const userOut = useRef(false);
+  const liveUserRef = useRef(null);
   const [authFail, setAuthFail] = useState(false);
   const stack = useRef([bootAddr()]);
   const toastT = useRef(null);
@@ -1994,7 +1996,7 @@ export default function App() {
   const loadStaff = () => { api.loadReports().then(setLiveReports).catch(() => {}); api.loadVerifQueue().then(setLiveVerifQueue).catch(() => {}); api.loadSupport().then(setLiveTickets).catch(() => {}); };
   const onSession = async (session) => {
     const u = session && session.user ? { id: session.user.id, email: session.user.email, name: (session.user.email || '').split('@')[0] } : null;
-    setLiveUser(u);
+    setLiveUser(u); liveUserRef.current = u;
     const c = await refreshCatalog(u && u.id).catch(() => null);
     if (!u) { setLiveFavs(new Set()); setLiveSearches([]); setLiveConvs([]); setProfile(null); setLiveVerif(null); setLiveVerifQueue([]); setLiveTickets([]); setLiveReports([]); setLiveNotes([]); setLiveStats({}); return; }
     try { const m = await api.loadMine(u.id); setProfile(m.profile); setLiveFavs(m.favs); setLiveSearches(m.searches); if (m.profile && m.profile.role === 'admin') loadStaff(); if (m.profile && m.profile.org_id) api.loadVerification(m.profile.org_id).then(setLiveVerif).catch(() => {}); else setLiveVerif(null); } catch (e) { /* signed in, but extras failed */ }
@@ -2023,7 +2025,11 @@ export default function App() {
         await onSession(data.session);
         try { const u = new URL(location.href); if (u.searchParams.has('code')) { u.searchParams.delete('code'); history.replaceState(null, '', u.pathname + u.search + u.hash); } } catch (e) { /* ignore */ }
         setMode('live');
-        off = api.sb().auth.onAuthStateChange((ev, session) => { if (ev === 'SIGNED_IN' || ev === 'SIGNED_OUT') onSession(session); }).data.subscription;
+        off = api.sb().auth.onAuthStateChange((ev, session) => {
+          if (ev === 'SIGNED_OUT' && liveUserRef.current && !userOut.current) notify('You were signed out. Sign in again to continue.');
+          if (ev === 'SIGNED_OUT') userOut.current = false;
+          if (ev === 'SIGNED_IN' || ev === 'SIGNED_OUT') onSession(session);
+        }).data.subscription;
       } catch (e) { setMode('demo'); }
     });
     return () => { alive = false; off && off.unsubscribe(); };
@@ -2056,7 +2062,7 @@ export default function App() {
     return p && p.type === 'go' ? p.href : null;
   };
   const changeEmail = async (email) => { if (live) { await api.changeEmail(email); return; } setUser((u) => ({ ...u, email, name: email.split('@')[0] })); };
-  const signOutAll = async () => { if (live) { await api.signOutEverywhere(); return; } setUser(null); setFavs(new Set()); setConvs([]); setSearches([]); };
+  const signOutAll = async () => { if (live) { userOut.current = true; try { await api.signOutEverywhere(); } catch (e) { userOut.current = false; throw e; } return; } setUser(null); setFavs(new Set()); setConvs([]); setSearches([]); };
   const exportData = async () => {
     if (live) return api.exportMyData(liveUser);
     return { exported_at: new Date().toISOString(), account: user, listings: listings.filter((l) => l.mine), saved_listings: [...favs], saved_searches: searches, conversations: convs, document_room: rooms, notifications: demoNotes };
@@ -2065,7 +2071,7 @@ export default function App() {
     if (live) { await api.deleteMyData(liveUser); setLiveUser(null); setLiveFavs(new Set()); setLiveSearches([]); setLiveConvs([]); setProfile(null); setLiveVerif(null); setLiveNotes([]); await refreshCatalog(null).catch(() => {}); return; }
     store.clear(); location.hash = ''; location.reload();
   };
-  const signOut = () => { if (live) { api.sb().auth.signOut(); return; } setUser(null); setFavs(new Set()); setConvs([]); setSearches([]); };
+  const signOut = () => { try { localStorage.removeItem('vgPending'); } catch (e) { /* storage blocked */ } if (live) { userOut.current = true; api.sb().auth.signOut().catch(() => { userOut.current = false; }); notify('Signed out'); return; } setUser(null); setFavs(new Set()); setConvs([]); setSearches([]); notify('Signed out'); };
   const toggleFav = (id) => {
     if (!curUser) { pending.current = { type: 'save', id }; go(`#/login?next=${enc(stack.current[stack.current.length - 1] || '#/')}`); return; }
     if (live) { const had = liveFavs.has(id); setLiveFavs((f) => { const n = new Set(f); had ? n.delete(id) : n.add(id); return n; }); (had ? api.removeFav(liveUser.id, id) : api.addFav(liveUser.id, id)).catch((e) => { setLiveFavs((f) => { const n = new Set(f); had ? n.add(id) : n.delete(id); return n; }); liveErr(e); }); return; }
