@@ -560,6 +560,7 @@ function ListingCard({ l, showType }) {
   const { orgs, favs, toggleFav, user } = useApp();
   const t = TYPES[l.type], org = orgs[l.org], saved = favs.has(l.id);
   const spec = t.meta(l).filter(Boolean).slice(0, 2).join(' · '); // the two facts that decide a first look; the rest is on the detail page
+  const isNew = l.status === 'published' && Date.now() - l.createdAt < 3 * 864e5;
   const canAct = l.status === 'published' && !(l.mine && user);
   return (
     <article className="card">
@@ -572,7 +573,7 @@ function ListingCard({ l, showType }) {
         <button className="save" aria-pressed={saved} aria-label={saved ? `Remove ${l.title} from saved` : `Save ${l.title}`} onClick={() => toggleFav(l.id)}><span><Icon n="heart" size={16} /></span></button>
       </div>
       <div className="cbody">
-        <div className={'cprice' + (/^(\$|From|Call-out|Install)/.test(priceText(l)) ? '' : ' txt')}>{priceText(l)}</div>
+        <div className="cprow"><div className={'cprice' + (/^(\$|From|Call-out|Install)/.test(priceText(l)) ? '' : ' txt')}>{priceText(l)}</div>{isNew && <span className="badge info">New</span>}</div>
         <a className="ctitle" href={hrefFor(l)}>{l.title}</a>
         <div className="cspec" title={spec}>{spec || '\u00a0'}</div>
         <div className="cloc"><Icon n="pin" size={13} /><span>{l.geo.city}, {l.geo.st}</span></div>
@@ -903,7 +904,7 @@ function Settings({ go }) {
             </form>
           )}
         </div>
-        {emMsg && <div className="banner" role="status">{live ? <>Check <b>{emMsg}</b> for a confirmation link. Your email changes after you confirm. Until then, keep signing in with {user.email}.</> : <>Email changed to <b>{emMsg}</b>.</>}</div>}
+        {emMsg && <div className="banner info" role="status">{live ? <>Check <b>{emMsg}</b> for a confirmation link. Your email changes after you confirm. Until then, keep signing in with {user.email}.</> : <>Email changed to <b>{emMsg}</b>.</>}</div>}
         <div className="list">
           <div className="item static"><span className="t"><b>Password</b><span className="muted">Optional. You can always sign in with a code emailed to you.</span></span>{!pwOpen && <button className="btn secondary sm" onClick={() => { setPwOpen(true); setPw1(''); setPw2(''); }}>Set or change</button>}</div>
           {pwOpen && (
@@ -1292,7 +1293,7 @@ function Detail({ route, go }) {
         <a href={encodeQuery({ ...DEFAULT_QUERY, f: {}, cat: l.type })}>{t.label}</a>
       </nav>
       {!open && (
-        <div className="banner" role="status" style={{ marginBottom: 16 }}>
+        <div className="banner warn" role="status" style={{ marginBottom: 16 }}>
           <b>{l.status === 'sold' ? 'This item has been sold.' : l.status === 'filled' ? 'This opportunity has been filled.' : `This listing is ${STATUS_LABEL[l.status].toLowerCase()} and not accepting inquiries.`}</b>{' '}
           <a href={encodeQuery({ ...DEFAULT_QUERY, f: {}, cat: l.type, loc: l.geo.city + ', ' + l.geo.st })}><u>See similar {t.label.toLowerCase()} near {l.geo.city}</u></a>{' '}<button className="btn secondary sm" style={{ marginLeft: 8 }} onClick={() => { const sq = { ...DEFAULT_QUERY, f: l.type === 'machines' && l.f.machineType ? { machineType: l.f.machineType } : {}, cat: l.type }; user ? saveSearch(sq) : requireAuth({ type: 'saveSearch', query: sq }, go); }}><Icon n="send" size={14} />Alert me to similar</button>
         </div>
@@ -1301,7 +1302,7 @@ function Detail({ route, go }) {
         <div className="stack" style={{ gap: 24 }}>
           <Gallery l={l} />
           <div className="sect">
-            <div className="row2" style={{ flexWrap: 'wrap' }}><span className="badge">{t.singular}</span>{l.sponsored && <span className="badge sp">Sponsored</span>}{!open && <span className="badge warn">{STATUS_LABEL[l.status]}</span>}</div>
+            <div className="row2" style={{ flexWrap: 'wrap' }}><span className="badge">{t.singular}</span>{open && Date.now() - l.createdAt < 3 * 864e5 && <span className="badge info">New</span>}{l.sponsored && <span className="badge sp">Sponsored</span>}{!open && <span className="badge warn">{STATUS_LABEL[l.status]}</span>}</div>
             <h1>{l.title}</h1>
             <p className="muted" style={{ margin: 0 }}>{l.type === 'services' ? `Serves ${l.f.coverage} mi around ${l.geo.city}, ${l.geo.st}` : l.type === 'routes' ? `Operating around ${l.geo.city}, ${l.geo.st}` : `${l.geo.city}, ${l.geo.st}`} · Updated {new Date(l.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
           </div>
@@ -1409,7 +1410,7 @@ function Inquire({ route, go }) {
         <span className="iq-text"><b>{l.title}</b><span className="muted">{orgs[l.org].name}</span><span className="muted"><Icon n="pin" size={13} />{l.geo.city}, {l.geo.st} · {priceText(l)}</span></span>
       </a>
       {l.photos.length > 1 && <div className="iq-strip" aria-label="More photos of this space">{l.photos.slice(1, 4).map((p, i) => <img key={i} src={p} alt={`${l.title}, photo ${i + 2}`} />)}</div>}
-      {existing && <div className="banner" role="status">{existing.status === 'open' ? <>You already have a conversation about this listing. Sending adds your message to it. <a href={`#/messages?c=${existing.id}`}><u>Open it</u></a></> : <>Your earlier conversation about this listing is {existing.status}. <a href={`#/messages?c=${existing.id}`}><u>View it</u></a></>}</div>}
+      {existing && <div className="banner info" role="status">{existing.status === 'open' ? <>You already have a conversation about this listing. Sending adds your message to it. <a href={`#/messages?c=${existing.id}`}><u>Open it</u></a></> : <>Your earlier conversation about this listing is {existing.status}. <a href={`#/messages?c=${existing.id}`}><u>View it</u></a></>}</div>}
       {fail && <div className="alert" role="alert"><span>{fail}</span><a className="btn secondary sm" href={encodeQuery({ ...DEFAULT_QUERY, f: {}, cat: l.type })}>Find alternatives</a></div>}
       {t.inquiry.fields.map((f) => <FieldInput key={f.key} def={f} idp="q" value={vals[f.key]} onChange={(v) => setVals({ ...vals, [f.key]: v })} error={errs[f.key]} />)}
       <p className="muted iconline"><Icon n="lock" size={14} />Only this seller sees your message. Your email stays hidden.</p>
@@ -1932,7 +1933,7 @@ function Billing({ go }) {
   return (
     <div className="page">
       <h1>Billing</h1>
-      <div className="banner" role="note"><b>Paid plans aren’t available yet.</b> This screen is a preview: nothing here can be bought, and no card is charged today.</div>
+      <div className="banner warn" role="note"><b>Paid plans aren’t available yet.</b> This screen is a preview: nothing here can be bought, and no card is charged today.</div>
       <div className="plans">
         <div className={'plan' + (!isPro ? ' current' : '')}>
           <div className="plan-h"><b>Standard</b><span>Free</span></div>
@@ -2216,7 +2217,7 @@ function Login({ route, go }) {
     <>
       {authFail && !linkErr && !err.form && <div className="alert" role="alert"><span>That link couldn’t sign you in here. Links only work in the browser where you asked for them, and only once. Request a new one, or use the code from the email.</span></div>}
       {linkErr && !err.form && <div className="alert" role="alert"><span>{/expired|invalid/i.test(linkErr) ? 'That link expired or was already used. Request a new one, or use the code from the email.' : linkErr.replace(/\+/g, ' ')}</span></div>}
-      {route.reason === 'expired' && !err.form && <div className="banner" role="status">Your session ended, so we signed you out to keep your account safe. Sign in again and we’ll take you back.</div>}
+      {route.reason === 'expired' && !err.form && <div className="banner info" role="status">Your session ended, so we signed you out to keep your account safe. Sign in again and we’ll take you back.</div>}
       {err.form && <div className="alert" role="alert"><span>{err.form}</span>{unconfirmed && <button type="button" className="btn secondary sm" onClick={() => emailMe('signup')}>Send me a code</button>}</div>}
     </>
   );
@@ -2439,7 +2440,9 @@ export default function App() {
   const log = (msg) => setAudit((x) => [{ at: Date.now(), by: user ? user.email : 'system', msg }, ...x]);
   const notify = useCallback((msg, undo) => {
     clearTimeout(toastT.current);
-    setToast({ msg, undo });
+    // tone follows the wording: problems read red, completed actions green, the rest stay neutral
+    const tone = /couldn|can.t |failed|error|isn.t |wasn.t |not saved|try again/i.test(msg) ? 'bad' : /\b(sent|saved|copied|posted|updated|removed|withdrawn|published|added|deleted|submitted|signed in|confirmed|verified)\b/i.test(msg) ? 'ok' : '';
+    setToast({ msg, undo, tone });
     toastT.current = setTimeout(() => setToast(null), undo ? 6000 : 3500);
   }, []);
   const unread = curConvs.reduce((n, c) => n + (c.unread || 0), 0);
@@ -2768,7 +2771,7 @@ export default function App() {
         <main className="main" id="main" tabIndex={-1}>{view}<Footer /></main>
       </div>
       <TabBar route={route} />
-      {toast && <div className="toast" role="status"><span>{toast.msg}</span>{toast.undo && <button onClick={() => { toast.undo(); setToast(null); }}>Undo</button>}</div>}
+      {toast && <div className={'toast' + (toast.tone ? ' ' + toast.tone : '')} role="status"><span>{toast.msg}</span>{toast.undo && <button onClick={() => { toast.undo(); setToast(null); }}>Undo</button>}</div>}
     </Ctx.Provider>
   );
 }
