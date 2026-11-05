@@ -667,6 +667,9 @@ function SearchBox({ route, go, query }) {
 const NAV = [
   ['', 'Explore', 'search'], ['machines', 'Machines', 'machine'], ['parts', 'Parts', 'cog'], ['locations', 'Locations', 'building'], ['routes', 'Routes', 'route'], ['services', 'Services', 'wrench'], ['wanted', 'Wanted', 'megaphone'],
 ];
+/* A canceled plan or placement keeps working until the end of the month that was paid for; canceling only stops the next renewal. */
+const PERIOD = 30 * 864e5;
+const promoLive = (p) => p.status === 'active' || (p.status === 'canceled' && p.until > Date.now());
 const TOP_LEVEL = ['browse', 'saved', 'messages', 'mine', 'account'];
 const PUSHED_TITLES = { info: 'VendGrid', sellers: 'Sellers', settings: 'Settings', activity: 'Activity', listing: 'Listing', inquire: 'Contact seller', post: 'New listing', business: 'Seller', billing: 'Billing', bizsettings: 'Business settings', admin: 'Admin', legal: 'Help', guide: 'Buyer’s guide', login: 'Sign in', notfound: 'Not found' };
 function Header({ route, go }) {
@@ -1737,31 +1740,34 @@ function NotFound({ go }) {
 const fmtDate = (t) => new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
 function Billing({ go }) {
-  const { user, requireAuth, plan, subscribe, cancelPlan, promos, listings, cancelPromo, confirmPayment, invoices, events, promote } = useApp();
+  const { user, requireAuth, plan, isPro, subscribe, cancelPlan, promos, listings, cancelPromo, confirmPayment, invoices, events, promote } = useApp();
   useEffect(() => { if (!user) requireAuth({ type: 'go', href: '#/billing' }, go, true); }, [user]);
   if (!user) return null;
   const title = (id) => (listings.find((l) => l.id === id) || {}).title || 'Listing';
-  const visible = promos.filter((p) => p.status !== 'canceled');
+  const visible = promos.filter((p) => p.status !== 'canceled' || promoLive(p));
+  const endsOn = plan.status === 'canceled' && plan.until > Date.now() ? plan.until : 0;
   return (
     <div className="page">
       <h1>Billing</h1>
+      <div className="banner" role="note"><b>Paid plans aren’t available yet.</b> This screen is a preview: nothing here can be bought, and no card is charged today.</div>
       <div className="plans">
-        <div className={'plan' + (plan.status !== 'active' ? ' current' : '')}>
+        <div className={'plan' + (!isPro ? ' current' : '')}>
           <div className="plan-h"><b>Standard</b><span>Free</span></div>
-          <ul>{['Post unlimited listings', 'Save listings and searches', 'Message buyers and sellers'].map((x) => <li key={x}><Icon n="check" size={16} />{x}</li>)}</ul>
-          {plan.status !== 'active' && <span className="badge">Your plan</span>}
+          <ul>{['Post unlimited listings', 'Save listings and searches', 'Message buyers and sellers', 'Apply for the Verified badge'].map((x) => <li key={x}><Icon n="check" size={16} />{x}</li>)}</ul>
+          {!isPro && <span className="badge">Your plan</span>}
         </div>
-        <div className={'plan' + (plan.status === 'active' ? ' current' : '')}>
+        <div className={'plan' + (isPro ? ' current' : '')}>
           <div className="plan-h"><b>Professional</b><span>$49 / mo</span></div>
           <ul>{['Everything in Standard', 'Views and inquiries per listing', 'Business tools'].map((x) => <li key={x}><Icon n="check" size={16} />{x}</li>)}<li className="no"><Icon n="x" size={16} />Doesn’t add a Verified badge</li></ul>
-          {plan.status === 'active' ? <span className="badge ok">Your plan</span> : (plan.status === 'none' || plan.status === 'canceled') && <button className="btn" onClick={subscribe}>Start Professional</button>}
+          {isPro ? <span className="badge ok">{endsOn ? `Active until ${fmtDate(endsOn)}` : 'Your plan'}</span> : (plan.status === 'none' || plan.status === 'canceled') && <button className="btn" onClick={subscribe}>Start Professional</button>}
         </div>
       </div>
-      {plan.status !== 'none' && plan.status !== 'canceled' && <section className="panel" aria-labelledby="pl">
+      {plan.status !== 'none' && (plan.status !== 'canceled' || endsOn > 0) && <section className="panel" aria-labelledby="pl">
         <div className="row2" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
           <h2 id="pl">Professional</h2>
-          {plan.status !== 'none' && <span className={'badge' + (plan.status === 'active' ? ' ok' : plan.status === 'pending' ? ' warn' : '')}>{{ pending: 'Waiting for payment confirmation', active: 'Active', canceled: 'Canceled' }[plan.status]}</span>}
+          {plan.status !== 'none' && <span className={'badge' + (plan.status === 'active' ? ' ok' : plan.status === 'pending' ? ' warn' : '')}>{{ pending: 'Waiting for payment confirmation', active: 'Active, renews monthly', canceled: 'Canceled' }[plan.status]}</span>}
         </div>
+        {endsOn > 0 && <p className="muted" style={{ margin: 0 }}>Canceled. It won’t renew and stays active until {fmtDate(endsOn)}.</p>}
         {plan.status === 'pending' && <p className="muted" style={{ margin: 0 }}>Features unlock only after the payment provider confirms. Nothing is granted from this screen.</p>}
         <div className="row2" style={{ flexWrap: 'wrap' }}>
           {plan.status === 'pending' && <button className="btn secondary" onClick={() => confirmPayment('plan', plan.ref)}>Sandbox: send payment confirmation</button>}
@@ -1769,19 +1775,19 @@ function Billing({ go }) {
         </div>
       </section>}
       <section className="stack" aria-labelledby="sp">
-        <div><h2 id="sp">Sponsored placements</h2><div className="muted">$29 / month per listing · always labeled Sponsored</div></div>
+        <div><h2 id="sp">Sponsored placements</h2><div className="muted">$29 / month per listing · always labeled Sponsored · pauses when the listing isn’t published</div></div>
         {visible.length ? <div className="list">{visible.map((p) => (
           <div className="item" key={p.id} style={{ cursor: 'default', flexWrap: 'wrap' }}>
-            <div className="t"><b>{title(p.listingId)}</b><span className="muted">{p.status === 'active' ? 'Active' : p.status === 'suspended' ? 'Paused. Billing stops while the listing isn’t published.' : 'Waiting for payment confirmation'}</span></div>
+            <div className="t"><b>{title(p.listingId)}</b><span className="muted">{p.status === 'canceled' ? `Canceled. It won’t renew and stays active until ${fmtDate(p.until)}.` : p.status === 'active' ? (p.until ? `Active, renews monthly` : 'Active') : p.status === 'suspended' ? 'Paused. Billing stops while the listing isn’t published.' : 'Waiting for payment confirmation'}</span></div>
             {p.status === 'pending' && <button className="btn secondary sm" onClick={() => confirmPayment('promo', p.id)}>Sandbox: send payment confirmation</button>}
-            <button className="btn ghost sm" onClick={() => cancelPromo(p.id)}>Cancel</button>
-          </div>))}</div> : (() => { const can = listings.filter((l) => l.mine && l.status === 'published' && !promos.some((p) => p.listingId === l.id && p.status !== 'canceled')); return can.length ? <div className="list">{can.map((l) => <div className="item static" key={l.id}><div className="t"><b>{l.title}</b><span className="muted">{priceText(l)} · {l.geo.city}, {l.geo.st}</span></div><button className="btn secondary sm" onClick={() => promote(l.id)}>Promote · $29/mo</button></div>)}</div> : <div className="empty"><p>Publish a listing first, then promote it here.</p><a className="btn secondary" href="#/post">Post a listing</a></div>; })()}
+            {p.status !== 'canceled' && <button className="btn ghost sm" onClick={() => cancelPromo(p.id)}>Cancel</button>}
+          </div>))}</div> : (() => { const can = listings.filter((l) => l.mine && l.status === 'published' && !promos.some((p) => p.listingId === l.id && (p.status !== 'canceled' || promoLive(p)))); return can.length ? <div className="list">{can.map((l) => <div className="item static" key={l.id}><div className="t"><b>{l.title}</b><span className="muted">{priceText(l)} · {l.geo.city}, {l.geo.st}</span></div><button className="btn secondary sm" onClick={() => promote(l.id)}>Promote · $29/mo</button></div>)}</div> : <div className="empty"><p>Publish a listing first, then promote it here.</p><a className="btn secondary" href="#/post">Post a listing</a></div>; })()}
       </section>
       <section className="stack" aria-labelledby="iv"><h2 id="iv">Invoices</h2>
         {invoices.length ? <div className="list">{invoices.map((i) => <div className="item" key={i.id} style={{ cursor: 'default' }}><div className="t"><b>{i.desc}</b><span className="muted">{fmtDate(i.at)} · {i.id}</span></div><b>{FMT(i.amount)}</b></div>)}</div> : <p className="muted" style={{ margin: 0 }}>Invoices appear here after a payment is confirmed.</p>}
         {events.length > 0 && <button className="btn ghost sm" style={{ alignSelf: 'flex-start' }} onClick={() => confirmPayment(events[0].type === 'subscription.changed' ? 'plan' : 'promo', events[0].id.replace('evt_', ''))}>Sandbox: replay last payment event</button>}
       </section>
-      <p className="muted" style={{ margin: 0, fontSize: 12 }}>Prices are proposals that still need commercial validation. This is a sandbox: no card is charged.</p>
+      <p className="muted" style={{ margin: 0, fontSize: 12 }}>The price is shown before you pay. Plans renew monthly until you cancel, and canceling stops the next renewal. <a className="u" href="#/legal?doc=refunds">Refunds and cancellation</a></p>
     </div>
   );
 }
@@ -2064,9 +2070,9 @@ export default function App() {
   const srcListings = live ? liveListings : listings;
   const liveConvsSeen = useMemo(() => liveConvs.map((c) => ({ ...c, unread: c.msgs.filter((m) => m.from === 'them' && m.at > (seenAt[c.id] || 0)).length })), [liveConvs, seenAt]);
   const curUser = live ? liveUser : user, curFavs = live ? liveFavs : favs, curSearches = live ? liveSearches : searches, curConvs = live ? liveConvsSeen : convs;
-  const allListings = useMemo(() => srcListings.map((l) => (l.status === 'published' && promos.some((p) => p.listingId === l.id && p.status === 'active') ? { ...l, sponsored: true } : l)), [srcListings, promos]);
+  const allListings = useMemo(() => srcListings.map((l) => (l.status === 'published' && promos.some((p) => p.listingId === l.id && promoLive(p)) ? { ...l, sponsored: true } : l)), [srcListings, promos]);
   const promosView = useMemo(() => promos.map((p) => { const l = listings.find((x) => x.id === p.listingId); return p.status === 'active' && (!l || l.status !== 'published') ? { ...p, status: 'suspended' } : p; }), [promos, listings]);
-  const isPro = plan.status === 'active';
+  const isPro = plan.status === 'active' || (plan.status === 'canceled' && plan.until > Date.now());
   const isAdmin = live ? !!profile && profile.role === 'admin' : !!user && /admin/i.test(user.email.split('@')[0]);
   const log = (msg) => setAudit((x) => [{ at: Date.now(), by: user ? user.email : 'system', msg }, ...x]);
   const notify = useCallback((msg, undo) => {
@@ -2242,22 +2248,22 @@ export default function App() {
     apply();
   };
   const subscribe = () => { setPlan({ status: 'pending', ref: 'sub_' + nid() }); log('Started Professional checkout'); };
-  const cancelPlan = () => { setPlan((p) => ({ ...p, status: 'canceled' })); log('Canceled Professional plan'); notify('Professional canceled. Your listings stay published.'); };
+  const cancelPlan = () => { setPlan((p) => ({ ...p, status: 'canceled' })); log('Canceled Professional plan'); notify(plan.until > Date.now() ? `Professional canceled. It won’t renew, and stays active until ${fmtDate(plan.until)}.` : 'Professional canceled. Your listings stay published.'); };
   const promote = (listingId) => {
     const l = listings.find((x) => x.id === listingId);
     if (!l || l.status !== 'published') { notify('Only published listings can be promoted.'); return; }
-    if (promos.some((p) => p.listingId === listingId && ['pending', 'active'].includes(p.status))) { notify('This listing already has a promotion.'); return; }
+    if (promos.some((p) => p.listingId === listingId && (['pending', 'active'].includes(p.status) || promoLive(p)))) { notify('This listing already has a promotion.'); return; }
     setPromos((p) => [{ id: 'promo_' + nid(), listingId, status: 'pending' }, ...p]); log(`Started sponsored checkout for listing ${listingId}`);
   };
-  const cancelPromo = (id) => { setPromos((p) => p.map((x) => (x.id === id ? { ...x, status: 'canceled' } : x))); log('Canceled sponsored placement'); notify('Promotion canceled. It stops appearing in paid slots.'); };
+  const cancelPromo = (id) => { const cur = promos.find((x) => x.id === id); const live = cur && cur.status === 'active' && cur.until > Date.now(); setPromos((p) => p.map((x) => (x.id === id ? { ...x, status: 'canceled' } : x))); log('Canceled sponsored placement'); notify(live ? `Sponsored placement canceled. It won’t renew, and stays active until ${fmtDate(cur.until)}.` : 'Sponsored placement canceled. It stops appearing in paid slots.'); };
   const confirmPayment = (kind, ref) => {
     if (kind === 'promo') {
       const p = promos.find((x) => x.id === ref); const l = p && listings.find((x) => x.id === p.listingId);
       if (!l || l.status !== 'published') { setPromos((ps) => ps.map((x) => (x.id === ref ? { ...x, status: 'canceled' } : x))); notify('That listing is no longer published, so the promotion was canceled and not charged.'); return; }
     }
     processEvent('evt_' + ref, kind === 'plan' ? 'subscription.changed' : 'promotion.activated', () => {
-    if (kind === 'plan') { setPlan((p) => ({ ...p, status: 'active' })); setInvoices((i) => [{ id: 'in_' + nid(), desc: 'Professional, monthly', amount: 49, at: Date.now() }, ...i]); }
-    else { setPromos((p) => p.map((x) => (x.id === ref ? { ...x, status: 'active' } : x))); setInvoices((i) => [{ id: 'in_' + nid(), desc: 'Sponsored listing, monthly', amount: 29, at: Date.now() }, ...i]); }
+    if (kind === 'plan') { setPlan((p) => ({ ...p, status: 'active', until: Date.now() + PERIOD })); setInvoices((i) => [{ id: 'in_' + nid(), desc: 'Professional, monthly', amount: 49, at: Date.now() }, ...i]); }
+    else { setPromos((p) => p.map((x) => (x.id === ref ? { ...x, status: 'active', until: Date.now() + PERIOD } : x))); setInvoices((i) => [{ id: 'in_' + nid(), desc: 'Sponsored listing, monthly', amount: 29, at: Date.now() }, ...i]); }
     log(`Billing confirmed for ${ref}`);
     });
   };
