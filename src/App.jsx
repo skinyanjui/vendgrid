@@ -1455,12 +1455,14 @@ function Messages({ route, go }) {
 }
 
 function Mine({ go }) {
-  const { user, requireAuth, listings, setStatus, isPro, views, convs, promos, promote, cancelPromo } = useApp();
+  const { user, requireAuth, listings, setStatus, isPro, views, convs, promos, promote, cancelPromo, live, stats } = useApp();
   useEffect(() => { if (!user) requireAuth({ type: 'go', href: '#/my-listings' }, go, true); }, [user]);
   if (!user) return null;
   const mine = listings.filter((l) => l.mine);
   const active = mine.filter((l) => l.status === 'published');
-  const inq = (l) => convs.filter((c) => c.listingId === l.id && c.me === 'owner').length;
+  const inq = (l) => (live && stats[l.id] ? stats[l.id].inquiries : convs.filter((c) => c.listingId === l.id && c.me === 'owner').length);
+  const vw = (l) => (live ? (stats[l.id] || {}).views || 0 : views[l.id] || 0);
+  const sv = (l) => (live ? (stats[l.id] || {}).saves || 0 : 0);
   const totalInq = active.reduce((n, l) => n + inq(l), 0);
   return (
     <div className="page wide">
@@ -1469,9 +1471,10 @@ function Mine({ go }) {
         <div className="panel" aria-label="Analytics"><h3>Analytics</h3>
           <div className="row2" style={{ gap: 32, flexWrap: 'wrap' }}>
             <div><div className="price-lg">{active.length ? (totalInq / active.length).toFixed(1) : '0'}</div><div className="muted">Inquiries per active listing</div></div>
-            <div><div className="price-lg">{active.reduce((n, l) => n + (views[l.id] || 0), 0)}</div><div className="muted">Listing views</div></div>
+            <div><div className="price-lg">{active.reduce((n, l) => n + vw(l), 0)}</div><div className="muted">{live ? 'Views, last 30 days' : 'Listing views'}</div></div>
+            {live && <div><div className="price-lg">{active.reduce((n, l) => n + sv(l), 0)}</div><div className="muted">Saves</div></div>}
           </div>
-          <div className="muted" style={{ fontSize: 12 }}>Counts come from this demo session and include your own views.</div>
+          <div className="muted" style={{ fontSize: 12 }}>{live ? 'Views count each visitor once per visit and leave out your own. They’re approximate: repeat visits and automated traffic can add to them.' : 'Counts come from this demo session and include your own views.'}</div>
         </div>
       ) : <a className="lockedstats" href="#/billing" aria-label="Listing analytics, available with Professional"><span className="ls-v"><b>—</b><small>Inquiries per listing</small></span><span className="ls-v"><b>—</b><small>Listing views</small></span><span className="ls-cta"><Icon n="lock" size={14} />Unlock with Professional</span></a>}
       {mine.length ? <div className="list">{mine.map((l) => {
@@ -1479,7 +1482,7 @@ function Mine({ go }) {
         const promo = promos.find((p) => p.listingId === l.id && ['pending', 'active', 'suspended'].includes(p.status));
         return (
           <div className="item" key={l.id} style={{ cursor: 'default', flexWrap: 'wrap' }}>
-            <div className="t" style={{ minWidth: 200 }}><a href={hrefFor(l)}><b><u>{l.title}</u></b></a><span className="muted">{TYPES[l.type].label} · {priceText(l)} · {l.geo.city}, {l.geo.st}{isPro ? ` · ${views[l.id] || 0} views · ${inq(l)} inquiries` : ''}</span></div>
+            <div className="t" style={{ minWidth: 200 }}><a href={hrefFor(l)}><b><u>{l.title}</u></b></a><span className="muted">{TYPES[l.type].label} · {priceText(l)} · {l.geo.city}, {l.geo.st}{isPro ? ` · ${vw(l)} views${live ? ` · ${sv(l)} saves` : ''} · ${inq(l)} inquiries` : ''}</span></div>
             <span className={'badge' + (l.status === 'published' ? ' ok' : l.status === 'sold' || l.status === 'filled' ? '' : ' warn')}>{STATUS_LABEL[l.status]}</span>
             {promo && <span className="badge sp">{promo.status === 'active' ? 'Sponsored' : promo.status === 'suspended' ? 'Sponsorship paused' : 'Sponsorship pending payment'}</span>}
             {(['published', 'paused'].includes(l.status) || next.length > 0) && <div className="ractions">
@@ -1921,6 +1924,7 @@ export default function App() {
   const [liveVerifQueue, setLiveVerifQueue] = useState([]);
   const [liveTickets, setLiveTickets] = useState([]);
   const [liveNotes, setLiveNotes] = useState([]);
+  const [liveStats, setLiveStats] = useState({});
   const [demoNotes, setDemoNotes] = usePersist('notes', []);
   const [dmOrg, setDmOrg] = usePersist('dmOrg', {});
   const [rooms, setRooms] = usePersist('rooms', DEMO_ROOMS);
@@ -1979,10 +1983,11 @@ export default function App() {
     const u = session && session.user ? { id: session.user.id, email: session.user.email, name: (session.user.email || '').split('@')[0] } : null;
     setLiveUser(u);
     const c = await refreshCatalog(u && u.id).catch(() => null);
-    if (!u) { setLiveFavs(new Set()); setLiveSearches([]); setLiveConvs([]); setProfile(null); setLiveVerif(null); setLiveVerifQueue([]); setLiveTickets([]); setLiveReports([]); setLiveNotes([]); return; }
+    if (!u) { setLiveFavs(new Set()); setLiveSearches([]); setLiveConvs([]); setProfile(null); setLiveVerif(null); setLiveVerifQueue([]); setLiveTickets([]); setLiveReports([]); setLiveNotes([]); setLiveStats({}); return; }
     try { const m = await api.loadMine(u.id); setProfile(m.profile); setLiveFavs(m.favs); setLiveSearches(m.searches); if (m.profile && m.profile.role === 'admin') loadStaff(); if (m.profile && m.profile.org_id) api.loadVerification(m.profile.org_id).then(setLiveVerif).catch(() => {}); else setLiveVerif(null); } catch (e) { /* signed in, but extras failed */ }
     await refreshConvs(u.id, c);
     api.loadNotes().then(setLiveNotes).catch(() => {});
+    api.loadStats().then(setLiveStats).catch(() => {});
     const p = pending.current; pending.current = null;
     if (p && p.type === 'save') { setLiveFavs((f) => new Set(f).add(p.id)); api.addFav(u.id, p.id).catch(liveErr); }
     if (p && p.type === 'saveSearch') saveSearch(p.query, true);
@@ -2004,7 +2009,7 @@ export default function App() {
     return () => { alive = false; off && off.unsubscribe(); };
   }, []);
   // light polling for new messages while signed in
-  useEffect(() => { if (!live || !liveUser) return; const t = setInterval(() => { refreshConvs(liveUser.id); api.loadNotes().then(setLiveNotes).catch(() => {}); }, 20000); return () => clearInterval(t); }, [live, liveUser, liveOrgs, liveListings]);
+  useEffect(() => { if (!live || !liveUser) return; const t = setInterval(() => { refreshConvs(liveUser.id); api.loadNotes().then(setLiveNotes).catch(() => {}); api.loadStats().then(setLiveStats).catch(() => {}); }, 20000); return () => clearInterval(t); }, [live, liveUser, liveOrgs, liveListings]);
 
   const act = (a) => {
     if (a.type === 'save') setFavs((f) => new Set(f).add(a.id));
@@ -2211,14 +2216,14 @@ export default function App() {
     if (action === 'withdraw' && r) setListings((ls) => ls.map((l) => (l.id === r.listingId && TRANSITIONS[l.status].includes('withdrawn') ? { ...l, status: 'withdrawn', history: [...l.history, { at: Date.now(), to: 'withdrawn' }] } : l)));
     log(`Report ${id}: ${action}`);
   };
-  const bumpView = (id) => setViews((v) => ({ ...v, [id]: (v[id] || 0) + 1 }));
+  const bumpView = (id) => { if (live) api.countView(id); else setViews((v) => ({ ...v, [id]: (v[id] || 0) + 1 })); };
   const setDraft = (k, v) => setDrafts((d) => { const n = { ...d }; if (v) n[k] = v; else delete n[k]; return n; });
 
   useEffect(() => {
     const h = (e) => { const el = e.target.closest && e.target.closest('a[href^="#/"]'); if (!el || e.defaultPrevented || e.metaKey || e.ctrlKey || e.button) return; e.preventDefault(); go(el.getAttribute('href')); };
     document.addEventListener('click', h); return () => document.removeEventListener('click', h);
   }, [go]);
-  const ctx = { themeSel, seeSearch, listings: allListings, priv, metrics, impr, tickets: live ? liveTickets : tickets, track, trackImpr, addTicket, isPro, isAdmin, plan, promos: promosView, changeEmail, signOutAll, exportData, deleteData, notes, noteCount, markNotesRead, verif: verifView, verifQueue, openVerifDoc, myOrg, saveOrg, room, closeTicket, reports: live ? liveReports : reports, events, invoices, audit, views, subscribe, cancelPlan, promote, cancelPromo, confirmPayment, processEvent, submitVerif, decideVerif, decideReport, bumpView, orgs, user: curUser, favs: curFavs, searches: curSearches, convs: curConvs, live, mode, sendMagicLink, drafts, prefLoc, setPrefLoc, theme, setTheme, unread, notify, requireAuth, signIn, signOut, toggleFav, saveSearch, removeSearch, searchFromText, startInquiry, sendMsg, markRead, setConvStatus, blockConv, report, setStatus, publish, setDraft };
+  const ctx = { themeSel, seeSearch, listings: allListings, priv, metrics, impr, tickets: live ? liveTickets : tickets, track, trackImpr, addTicket, isPro, isAdmin, plan, stats: liveStats, promos: promosView, changeEmail, signOutAll, exportData, deleteData, notes, noteCount, markNotesRead, verif: verifView, verifQueue, openVerifDoc, myOrg, saveOrg, room, closeTicket, reports: live ? liveReports : reports, events, invoices, audit, views, subscribe, cancelPlan, promote, cancelPromo, confirmPayment, processEvent, submitVerif, decideVerif, decideReport, bumpView, orgs, user: curUser, favs: curFavs, searches: curSearches, convs: curConvs, live, mode, sendMagicLink, drafts, prefLoc, setPrefLoc, theme, setTheme, unread, notify, requireAuth, signIn, signOut, toggleFav, saveSearch, removeSearch, searchFromText, startInquiry, sendMsg, markRead, setConvStatus, blockConv, report, setStatus, publish, setDraft };
 
   let view;
   switch (route.name) {

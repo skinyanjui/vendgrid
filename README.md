@@ -52,6 +52,7 @@ Live for admin accounts: reports, verification review and support requests. Stil
 - `supabase/migrations/20261105020000_vg_doc_room_support.sql` — document room, support requests, document storage rules.
 - `supabase/migrations/20261105030000_vg_notifications.sql` — in-app notifications written by triggers; owner delete rules for photos.
 - `supabase/migrations/20261105040000_vg_delete_my_data.sql` — self-service data deletion used by Settings.
+- `supabase/migrations/20261105050000_vg_listing_stats.sql` — real view, save and inquiry counts for sellers.
 - `supabase/seed.sql` — the 35 demo listings and 10 sample businesses.
 - In **Authentication → URL Configuration**, add the deployed site URL (for example `https://<your-app>.vercel.app`) to **Redirect URLs**, otherwise magic links return to the project's default Site URL.
 

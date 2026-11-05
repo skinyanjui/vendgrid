@@ -318,3 +318,15 @@ export async function deleteMyData(user) {
   const r = await client.rpc('vg_delete_my_data'); fail(r.error);
   await client.auth.signOut();
 }
+
+/* ── listing statistics ── */
+const counted = new Set();
+/** Count one view per listing per browser session (a refresh doesn't count again). Fire and forget. */
+export function countView(id) {
+  if (!client || counted.has(id)) return; counted.add(id);
+  try { const k = 'vg-viewed'; const seen = JSON.parse(sessionStorage.getItem(k) || '[]'); if (seen.includes(id)) return; sessionStorage.setItem(k, JSON.stringify([...seen, id].slice(-200))); } catch (e) { /* private mode: fall back to once per page load */ }
+  client.rpc('vg_count_view', { p_listing: id }).then(() => {}, () => {}); }
+export async function loadStats() {
+  const r = await client.rpc('vg_my_stats'); fail(r.error);
+  return Object.fromEntries((r.data || []).map((x) => [x.listing_id, { views: x.views, saves: x.saves, inquiries: x.inquiries }]));
+}
