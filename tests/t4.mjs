@@ -1,5 +1,5 @@
 import { JSDOM } from 'jsdom'; import fs from 'fs';
-const dom=new JSDOM('<!doctype html><html><body>'+fs.readFileSync(new URL('../dist/index.html', import.meta.url),'utf8')+'</body></html>',{runScripts:'dangerously',pretendToBeVisual:true,url:'http://localhost/',beforeParse(w){w.scrollTo=()=>{};}});
+const dom=new JSDOM('<!doctype html><html><body>'+fs.readFileSync(new URL('../dist/index.html', import.meta.url),'utf8')+'</body></html>',{runScripts:'dangerously',pretendToBeVisual:true,url:'http://localhost/',beforeParse(w){w.scrollTo=()=>{};w.fetch=()=>Promise.reject(new Error('offline'));}});
 const w=dom.window,d=w.document,sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const nav=async h=>{w.location.hash=h;await sleep(450)};
 const setv=(id,v)=>{const el=d.getElementById(id);if(el&&el.getAttribute('role')==='radiogroup'){const b=[...el.querySelectorAll('[role=radio]')].find(x=>x.textContent===v);if(b)b.click();return;}const P=el.tagName==='SELECT'?w.HTMLSelectElement.prototype:el.tagName==='TEXTAREA'?w.HTMLTextAreaElement.prototype:w.HTMLInputElement.prototype;Object.getOwnPropertyDescriptor(P,'value').set.call(el,v);el.dispatchEvent(new w.Event('input',{bubbles:true}));el.dispatchEvent(new w.Event('change',{bubbles:true}))};

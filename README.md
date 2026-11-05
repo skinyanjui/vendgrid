@@ -27,14 +27,20 @@ Serve `dist/` with any static host. On Vercel, `vercel.json` sets the build comm
 
 ## Data
 
-The current front end runs on the sample data in `src/data.js` and keeps each visitor's changes in their browser (Account → Reset demo data clears it).
+The app talks to Supabase (`src/backend.js`). On start it checks whether the project answers:
 
-The Supabase backend lives in `supabase/`:
+- **Live mode** (normal on the deployed site): listings and businesses come from the `vg_` tables; sign-in is by emailed magic link; saved listings, saved searches, posting (with photo upload to the `vg-photos` bucket), conversations and messages (with photos), listing status changes and reports are stored in the database.
+- **Demo mode** (when Supabase can't be reached, e.g. in tests or sandboxed previews): everything runs on the sample data in `src/data.js` and is kept in the visitor's browser.
 
-- `migrations/20261105000000_vg_schema.sql` — tables, row-level security, server-side guards, and storage buckets. All objects are prefixed `vg_`.
-- `seed.sql` — the 35 demo listings and 10 sample businesses.
+Still demo-only in both modes: billing/promotions (no Stripe yet), business verification review, and the admin area's data.
 
-Wiring the screens to Supabase (magic-link sign-in, real posting with photo upload, real messaging) is the next step. Put the project URL and **publishable** key in `.env` (see `.env.example`); never commit a `service_role` key.
+`src/backend.js` holds the project URL and **publishable** key, which are safe in a browser; row-level security protects the data. Never put a `service_role` key in this repo.
+
+### Supabase setup
+
+- `supabase/migrations/20261105000000_vg_schema.sql` — tables, row-level security, server-side guards and storage buckets (all prefixed `vg_`).
+- `supabase/seed.sql` — the 35 demo listings and 10 sample businesses.
+- In **Authentication → URL Configuration**, add the deployed site URL (for example `https://<your-app>.vercel.app`) to **Redirect URLs**, otherwise magic links return to the project's default Site URL.
 
 ## Layout
 

@@ -1,6 +1,6 @@
 import { JSDOM } from 'jsdom'; import fs from 'fs';
 const errors=[];
-const dom=new JSDOM('<!doctype html><html><body>'+fs.readFileSync(new URL('../dist/index.html', import.meta.url),'utf8')+'</body></html>',{runScripts:'dangerously',pretendToBeVisual:true,url:'http://localhost/',beforeParse(w){w.scrollTo=()=>{};w.console.error=(...a)=>errors.push(a.join(' ').slice(0,200));w.addEventListener('error',e=>errors.push(e.message));}});
+const dom=new JSDOM('<!doctype html><html><body>'+fs.readFileSync(new URL('../dist/index.html', import.meta.url),'utf8')+'</body></html>',{runScripts:'dangerously',pretendToBeVisual:true,url:'http://localhost/',beforeParse(w){w.scrollTo=()=>{};w.fetch=()=>Promise.reject(new Error('offline'));w.console.error=(...a)=>errors.push(a.join(' ').slice(0,200));w.addEventListener('error',e=>errors.push(e.message));}});
 const w=dom.window,d=w.document,sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const nav=async h=>{w.location.hash=h;await sleep(450)};
 const btn=t=>[...d.querySelectorAll('button,a.btn')].find(b=>b.textContent.includes(t));

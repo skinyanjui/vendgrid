@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback, createContext
 import { TYPES, TYPE_KEYS, CITIES, dist, ORGS, SEED, PRIVATE_SEED, TRANSITIONS, STATUS_LABEL, FMT, resolveLocation, suggestLocations, hrefFor, slugify, optionsFor } from './data.js';
 import { PAGE, SORTS, DEFAULT_QUERY, sortOptions, effectiveSort, parseIntent, runSearch, suggest, priceText } from './engine.js';
 import { CSS } from './styles.js';
+import * as api from './backend.js';
 import L from 'leaflet';
 import LEAFLET_CSS from 'leaflet/dist/leaflet.css';
 import { Search, MapPin, Heart, Menu, X, Plus, Check, ArrowLeft, Share2, ChevronRight, ChevronLeft, Flag, SlidersHorizontal, Send, User, Package, Route as RouteIcon, Refrigerator, Wrench, ImagePlus, Trash2, Eye, Info, Building2, Sun, Moon, Monitor, Lock, EyeOff, BarChart3, Circle, Cog, Megaphone, Map as MapIcon, LayoutGrid, Paperclip } from 'lucide-react';
@@ -167,7 +168,7 @@ const OSM_TILES = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 const OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
 let leafletCssIn = false;
 function OsmMap({ points, circles = [], selected, onPick, height = 340, zoom, label, fallback }) {
-  const el = useRef(null), map = useRef(null), layer = useRef(null);
+  const el = useRef(null), map = useRef(null), layer = useRef(null), fitKey = useRef('');
   const [state, setState] = useState('loading');
   useEffect(() => {
     if (!leafletCssIn && typeof document !== 'undefined') { const st = document.createElement('style'); st.textContent = LEAFLET_CSS; document.head.appendChild(st); leafletCssIn = true; }
@@ -197,7 +198,12 @@ function OsmMap({ points, circles = [], selected, onPick, height = 340, zoom, la
       if (onPick) mk.on('click', () => onPick(p.key));
     });
     const all = [...points.map((p) => [p.lat, p.lng]), ...circles.flatMap((c) => { const d = c.radius / 111320; return [[c.lat + d, c.lng], [c.lat - d, c.lng]]; })];
-    if (all.length === 1 || zoom) m.setView(all[0], zoom || 10); else if (all.length) m.fitBounds(all, { padding: [36, 36], maxZoom: 10 });
+    // Only re-frame when the set of places changes, never on selection or re-render, so panning and zooming stick.
+    const key = all.map((x) => x.join(',')).join('|');
+    if (key !== fitKey.current) {
+      fitKey.current = key;
+      if (all.length === 1 || zoom) m.setView(all[0], zoom || 10); else if (all.length) m.fitBounds(all, { padding: [36, 36], maxZoom: 10 });
+    }
   }, [points, circles, selected]);
   if (state === 'failed' && fallback) return fallback;
   return <div className="osm" style={{ height }}><div ref={el} className="osm-map" role="region" aria-label={label} /></div>;
@@ -599,6 +605,7 @@ function ResetDemo() {
   );
 }
 function Account({ go }) {
+  const { live } = useApp();
   const { user, signOut, theme, themeSel, setTheme, isAdmin } = useApp();
   const Row = ({ to, title, sub }) => <a className="item nav" href={to}><span className="t"><b>{title}</b>{sub && <span className="muted">{sub}</span>}</span></a>;
   return (
@@ -618,7 +625,7 @@ function Account({ go }) {
       <div className="list">
         <div className="item static pref"><span className="t"><b>Appearance</b></span><Seg label="Appearance" options={[['light', 'Light', 'sun'], ['dark', 'Dark', 'moon'], ['system', 'Auto', 'auto']]} value={themeSel} onChange={setTheme} /></div>
       </div>
-      <ResetDemo />
+      {!live && <ResetDemo />}
       <h2 className="sech">Help</h2>
       <div className="list">
         <Row to="#/legal?doc=terms" title="Terms" /><Row to="#/legal?doc=privacy" title="Privacy" /><Row to="#/legal?doc=refunds" title="Refunds" /><Row to="#/legal?doc=support" title="Contact support" />
@@ -761,6 +768,7 @@ function Browse({ route, go }) {
   Object.entries(query.f).forEach(([k, v]) => { (Array.isArray(v) ? v : [v]).filter(Boolean).forEach((x) => tokens.push([x, () => set({ ...query, n: 1, f: { ...query.f, [k]: Array.isArray(v) ? v.filter((y) => y !== x) : '' } })])); });
   const nFilters = tokens.length;
   const sorts = sortOptions(query);
+  const mapItems = useMemo(() => (query.view === 'map' ? runSearch(listings, orgs, { ...query, n: 99 }).items : []), [listings, orgs, JSON.stringify(query)]);
   const clearAll = () => set({ ...DEFAULT_QUERY, f: {}, cat: query.cat, q: query.q, loc: query.loc });
   const label = query.cat === 'all' ? 'All listings' : TYPES[query.cat].label;
   const savedAlready = searches.some((s) => s.href === encodeQuery({ ...query, n: 1 }));
@@ -815,7 +823,7 @@ function Browse({ route, go }) {
         </div>
       ) : (
         <>
-          {query.view === 'map' ? <ResultsMap items={runSearch(listings, orgs, { ...query, n: 99 }).items} showType={query.cat === 'all'} /> : <div className="grid">{state.items.map((l) => <ListingCard key={l.id} l={l} showType={query.cat === 'all'} />)}</div>}
+          {query.view === 'map' ? <ResultsMap items={mapItems} showType={query.cat === 'all'} /> : <div className="grid">{state.items.map((l) => <ListingCard key={l.id} l={l} showType={query.cat === 'all'} />)}</div>}
           {query.view !== 'map' && state.hasMore && <div style={{ display: 'flex', justifyContent: 'center', marginTop: 24 }}><button className="btn secondary" disabled={state.status === 'more'} onClick={() => set({ ...query, n: query.n + 1 })}>{state.status === 'more' ? 'Loading…' : 'Load more'}</button></div>}
         </>
       )}
@@ -956,8 +964,8 @@ function Inquire({ route, go }) {
     setErrs(er);
     if (Object.keys(er).length) { const first = t.inquiry.fields.find((f) => er[f.key]); document.getElementById('q-' + first.key)?.focus(); return; }
     setBusy(true);
-    setTimeout(() => {
-      const r = startInquiry(l.id, vals);
+    setTimeout(async () => {
+      const r = await startInquiry(l.id, vals);
       setBusy(false);
       if (r.error) { setFail(r.error); return; }
       go(`#/messages?c=${r.convId}`);
@@ -1055,7 +1063,7 @@ function Post({ route, go }) {
     if (Object.keys(er).length) { const ids = Object.keys(er).map((k) => document.getElementById('p-' + k)).filter(Boolean).sort((x, y) => (x.compareDocumentPosition(y) & 4 ? -1 : 1)); (ids[0] || document.getElementById('p-photos'))?.focus(); ids[0]?.scrollIntoView?.({ block: 'center' }); notify(`Almost there. ${Object.keys(er).length === 1 ? 'One field needs' : Object.keys(er).length + ' fields need'} attention.`); return; }
     if (!user) { requireAuth({ type: 'go', href: '#/post' }, go); return; } // sign in only at the moment it's needed; the draft is kept
     setBusy(true);
-    setTimeout(() => { const l = publish(draft, editing); setDraft(dk, null); setBusy(false); go(hrefFor(l)); }, 500);
+    setTimeout(async () => { const l = await publish(draft, editing); setBusy(false); if (!l) return; setDraft(dk, null); go(hrefFor(l)); }, 500);
   };
   const addPhotos = async (files) => {
     const list = [...files].filter((f) => f.type.startsWith('image/')).slice(0, 8 - draft.photos.length);
@@ -1287,7 +1295,7 @@ function Footer() {
   return (
     <footer className="foot"><nav aria-label="Help and policies">
       <a href="#/legal?doc=terms">Terms</a><a href="#/legal?doc=privacy">Privacy</a><a href="#/legal?doc=refunds">Refunds</a><a href="#/legal?doc=support">Contact support</a>
-    </nav><span className="muted">Demo inventory. Listings are sample data, not live offers.</span></footer>
+    </nav><span className="muted">{useApp().live ? 'Sample listings from demo businesses are mixed in while VendGrid launches.' : 'Demo inventory. Listings are sample data, not live offers.'}</span></footer>
   );
 }
 
@@ -1440,9 +1448,30 @@ function Business({ route }) {
 }
 
 function Login({ route, go }) {
-  const { signIn } = useApp();
+  const { signIn, live, sendMagicLink, user } = useApp();
   const [email, setEmail] = useState('');
   const [err, setErr] = useState('');
+  const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  if (live) {
+    if (user) return <div className="page" style={{ maxWidth: 420, margin: '0 auto' }}><h1>You’re signed in</h1><p className="muted" style={{ margin: 0 }}>{user.email}</p><a className="btn" href={route.next || '#/'}>Continue</a></div>;
+    if (sent) return (
+      <div className="page" style={{ maxWidth: 420, margin: '0 auto' }}>
+        <span className="caticon" style={{ background: 'var(--gray-100)' }}><Icon n="send" size={24} /></span>
+        <h1>Check your email</h1>
+        <p style={{ margin: 0 }}>We sent a sign-in link to <b>{email}</b>. Open it on this device to finish signing in.</p>
+        <button className="btn secondary" onClick={() => setSent(false)}>Use a different email</button>
+      </div>
+    );
+    return (
+      <form className="page" style={{ maxWidth: 420, margin: '0 auto' }} noValidate onSubmit={async (e) => { e.preventDefault(); if (!/^\S+@\S+\.\S+$/.test(email)) { setErr('That email doesn’t look right. Try name@example.com.'); return; } setBusy(true); try { await sendMagicLink(email.trim()); setSent(true); } catch (x) { setErr(/rate|seconds/i.test(x.message) ? 'Too many links requested. Wait a minute and try again.' : 'We couldn’t send the link. Try again in a moment.'); } setBusy(false); }}>
+        <div><h1>Welcome to VendGrid</h1><p className="muted" style={{ margin: '4px 0 0' }}>Browse freely. Sign in when you’re ready to save, message or post.</p></div>
+        <Field id="em" label="Email" error={err}><input id="em" className={'input full' + (err ? ' bad' : '')} type="email" autoComplete="email" value={email} onChange={(e) => { setEmail(e.target.value); setErr(''); }} /></Field>
+        <button className="btn block" disabled={busy}>{busy ? 'Sending…' : 'Email me a sign-in link'}</button>
+        <p className="muted iconline" style={{ fontSize: 12 }}><Icon n="lock" size={14} />No password needed. The link signs you in on this device.</p>
+      </form>
+    );
+  }
   return (
     <form className="page" style={{ maxWidth: 420, margin: '0 auto' }} noValidate onSubmit={(e) => { e.preventDefault(); if (!/^\S+@\S+\.\S+$/.test(email)) { setErr('That email doesn’t look right. Try name@example.com.'); return; } const nx = signIn(email); go(nx || route.next || '#/', true); }}>
       <div><h1>Welcome to VendGrid</h1><p className="muted" style={{ margin: '4px 0 0' }}>Browse freely. Sign in when you’re ready to save, message or post.</p></div>
@@ -1454,6 +1483,9 @@ function Login({ route, go }) {
 }
 
 /* ───────────── app ───────────── */
+const UNKNOWN_ORG = { id: 'unknown', name: 'Independent seller', slug: '', city: '', about: '', verified: false };
+const withFallbackOrg = (o) => new Proxy(o, { get: (t, k) => (k in t || typeof k !== 'string' ? t[k] : UNKNOWN_ORG) });
+
 export default function App() {
   const [hash, setHash] = useState(() => fromAddr(typeof location !== 'undefined' ? location.hash : ''));
   const [listings, setListings] = usePersist('listings', SEED);
@@ -1479,6 +1511,16 @@ export default function App() {
   const [metrics, setMetrics] = usePersist('metrics', {});
   const [impr, setImpr] = usePersist('impr', {});
   const [tickets, setTickets] = usePersist('tickets', []);
+  // ── live backend (Supabase). 'checking' until we know; 'live' or 'demo' after. ──
+  const [mode, setMode] = useState('checking');
+  const [liveListings, setLiveListings] = useState([]);
+  const [liveOrgs, setLiveOrgs] = useState({});
+  const [liveUser, setLiveUser] = useState(null);
+  const [liveFavs, setLiveFavs] = useState(new Set());
+  const [liveSearches, setLiveSearches] = useState([]);
+  const [liveConvs, setLiveConvs] = useState([]);
+  const [profile, setProfile] = useState(null);
+  const live = mode === 'live';
   const seenImpr = useRef(new Set());
   const pending = useRef(null);
   const stack = useRef([fromAddr(typeof location !== 'undefined' ? location.hash : '')]);
@@ -1507,18 +1549,53 @@ export default function App() {
     if (route.name !== 'listing' && route.name !== 'business') document.title = (T[route.name] || 'VendGrid') + ' · VendGrid';
   }, [route.name, route.query && route.query.cat]);
 
-  const orgs = useMemo(() => ({ ...ORGS, dm: { ...ORGS.dm, verified: verif.status === 'verified' } }), [verif.status]);
-  const allListings = useMemo(() => listings.map((l) => (l.status === 'published' && promos.some((p) => p.listingId === l.id && p.status === 'active') ? { ...l, sponsored: true } : l)), [listings, promos]);
+  const orgs = useMemo(() => withFallbackOrg(live ? liveOrgs : { ...ORGS, dm: { ...ORGS.dm, verified: verif.status === 'verified' } }), [live, liveOrgs, verif.status]);
+  const srcListings = live ? liveListings : listings;
+  const curUser = live ? liveUser : user, curFavs = live ? liveFavs : favs, curSearches = live ? liveSearches : searches, curConvs = live ? liveConvs : convs;
+  const allListings = useMemo(() => srcListings.map((l) => (l.status === 'published' && promos.some((p) => p.listingId === l.id && p.status === 'active') ? { ...l, sponsored: true } : l)), [srcListings, promos]);
   const promosView = useMemo(() => promos.map((p) => { const l = listings.find((x) => x.id === p.listingId); return p.status === 'active' && (!l || l.status !== 'published') ? { ...p, status: 'suspended' } : p; }), [promos, listings]);
   const isPro = plan.status === 'active';
-  const isAdmin = !!user && /admin/i.test(user.email.split('@')[0]);
+  const isAdmin = live ? !!profile && profile.role === 'admin' : !!user && /admin/i.test(user.email.split('@')[0]);
   const log = (msg) => setAudit((x) => [{ at: Date.now(), by: user ? user.email : 'system', msg }, ...x]);
   const notify = useCallback((msg, undo) => {
     clearTimeout(toastT.current);
     setToast({ msg, undo });
     toastT.current = setTimeout(() => setToast(null), undo ? 6000 : 3500);
   }, []);
-  const unread = convs.reduce((n, c) => n + (c.unread || 0), 0);
+  const unread = curConvs.reduce((n, c) => n + (c.unread || 0), 0);
+
+  const liveErr = (e) => notify(String(e && e.message || e).replace(/^.*?: /, '') || 'Something went wrong. Try again.');
+  const refreshCatalog = async (uid) => { const c = await api.loadCatalog(uid); setLiveOrgs(c.orgs); setLiveListings(c.listings); return c; };
+  const refreshConvs = async (uid, c) => { try { setLiveConvs(await api.loadConversations(uid, c ? c.orgs : liveOrgs, c ? c.listings : liveListings)); } catch (e) { /* keep last good copy */ } };
+  const onSession = async (session) => {
+    const u = session && session.user ? { id: session.user.id, email: session.user.email, name: (session.user.email || '').split('@')[0] } : null;
+    setLiveUser(u);
+    const c = await refreshCatalog(u && u.id).catch(() => null);
+    if (!u) { setLiveFavs(new Set()); setLiveSearches([]); setLiveConvs([]); setProfile(null); return; }
+    try { const m = await api.loadMine(u.id); setProfile(m.profile); setLiveFavs(m.favs); setLiveSearches(m.searches); } catch (e) { /* signed in, but extras failed */ }
+    await refreshConvs(u.id, c);
+    const p = pending.current; pending.current = null;
+    if (p && p.type === 'save') { setLiveFavs((f) => new Set(f).add(p.id)); api.addFav(u.id, p.id).catch(liveErr); }
+    if (p && p.type === 'saveSearch') saveSearch(p.query, true);
+    if (p && p.type === 'go') go(p.href, true); else if (stack.current[stack.current.length - 1].startsWith('#/login')) go('#/', true);
+  };
+  useEffect(() => {
+    let off = null, alive = true;
+    api.probe().then(async (ok) => {
+      if (!alive) return;
+      if (!ok) { setMode('demo'); return; }
+      try {
+        const { data } = await api.sb().auth.getSession();
+        await onSession(data.session);
+        try { const u = new URL(location.href); if (u.searchParams.has('code')) { u.searchParams.delete('code'); history.replaceState(null, '', u.pathname + u.search + u.hash); } } catch (e) { /* ignore */ }
+        setMode('live');
+        off = api.sb().auth.onAuthStateChange((ev, session) => { if (ev === 'SIGNED_IN' || ev === 'SIGNED_OUT') onSession(session); }).data.subscription;
+      } catch (e) { setMode('demo'); }
+    });
+    return () => { alive = false; off && off.unsubscribe(); };
+  }, []);
+  // light polling for new messages while signed in
+  useEffect(() => { if (!live || !liveUser) return; const t = setInterval(() => refreshConvs(liveUser.id), 20000); return () => clearInterval(t); }, [live, liveUser, liveOrgs, liveListings]);
 
   const act = (a) => {
     if (a.type === 'save') setFavs((f) => new Set(f).add(a.id));
@@ -1529,6 +1606,10 @@ export default function App() {
     const here = action.type === 'go' ? action.href : stack.current[stack.current.length - 1] || '#/';
     goFn(`#/login?next=${enc(here)}`, !!silent);
   };
+  const sendMagicLink = async (email) => {
+    const { error } = await api.sb().auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
+    if (error) throw error;
+  };
   const signIn = (email) => {
     const u = { email, name: email.split('@')[0] };
     setUser(u);
@@ -1538,26 +1619,34 @@ export default function App() {
     if (p && p.type !== 'go') { if (p.type === 'save') setFavs((f) => new Set(f).add(p.id)); if (p.type === 'saveSearch') saveSearch(p.query, true); return p.type === 'saveSearch' ? encodeQuery(p.query) : null; }
     return p && p.type === 'go' ? p.href : null;
   };
-  const signOut = () => { setUser(null); setFavs(new Set()); setConvs([]); setSearches([]); };
+  const signOut = () => { if (live) { api.sb().auth.signOut(); return; } setUser(null); setFavs(new Set()); setConvs([]); setSearches([]); };
   const toggleFav = (id) => {
-    if (!user) { pending.current = { type: 'save', id }; go(`#/login?next=${enc(stack.current[stack.current.length - 1] || '#/')}`); return; }
+    if (!curUser) { pending.current = { type: 'save', id }; go(`#/login?next=${enc(stack.current[stack.current.length - 1] || '#/')}`); return; }
+    if (live) { const had = liveFavs.has(id); setLiveFavs((f) => { const n = new Set(f); had ? n.delete(id) : n.add(id); return n; }); (had ? api.removeFav(liveUser.id, id) : api.addFav(liveUser.id, id)).catch((e) => { setLiveFavs((f) => { const n = new Set(f); had ? n.add(id) : n.delete(id); return n; }); liveErr(e); }); return; }
     setFavs((f) => { const n = new Set(f); n.has(id) ? n.delete(id) : n.add(id); return n; });
   };
   const saveSearch = (q, quiet) => {
     const href = encodeQuery({ ...q, n: 1 });
     const bits = [q.q && `“${q.q}”`, q.cat !== 'all' && TYPES[q.cat].label, q.loc, ...Object.values(q.f).flat().filter(Boolean)].filter(Boolean);
+    const name = bits.join(' · ') || 'All listings';
+    if (live) { if (liveSearches.some((x) => x.href === href)) return; const row = { href, q: { ...q, n: 1 }, seenAt: Date.now(), name, sub: 'Saved just now' }; setLiveSearches((s) => [row, ...s]); api.addSearch(name, href, row.q).then((id) => setLiveSearches((s) => s.map((x) => (x === row ? { ...x, id } : x)))).catch(liveErr); if (!quiet) notify('Search saved'); return; }
     setSearches((s) => (s.some((x) => x.href === href) ? s : [{ href, q: { ...q, n: 1 }, seenAt: Date.now(), name: bits.join(' · ') || 'All listings', sub: `Saved ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` }, ...s]));
     if (!quiet) notify('Search saved');
   };
-  const seeSearch = (href) => setSearches((x) => x.map((y) => (y.href === href ? { ...y, seenAt: Date.now() } : y)));
-  const removeSearch = (s) => { setSearches((x) => x.filter((y) => y !== s)); notify('Search removed', () => setSearches((x) => [s, ...x])); };
+  const seeSearch = (href) => live ? (setLiveSearches((x) => x.map((y) => (y.href === href ? { ...y, seenAt: Date.now() } : y))), (liveSearches.find((y) => y.href === href)?.id && api.seeSearchRow(liveSearches.find((y) => y.href === href).id).catch(() => {}))) : setSearches((x) => x.map((y) => (y.href === href ? { ...y, seenAt: Date.now() } : y)));
+  const removeSearch = (s) => { if (live) { setLiveSearches((x) => x.filter((y) => y !== s)); if (s.id) api.deleteSearch(s.id).catch(liveErr); notify('Search removed'); return; } setSearches((x) => x.filter((y) => y !== s)); notify('Search removed', () => setSearches((x) => [s, ...x])); };
   const searchFromText = (text) => {
     const base = route.name === 'browse' ? route.query : { ...DEFAULT_QUERY, f: {}, loc: prefLoc };
     const next = parseIntent(text, { ...base, q: text, n: 1 });
     go(encodeQuery(next));
   };
   const startInquiry = (listingId, vals) => {
-    const l = listings.find((x) => x.id === listingId);
+    const l = srcListings.find((x) => x.id === listingId);
+    if (live) {
+      if (!l || l.status !== 'published') return { error: 'LISTING_UNAVAILABLE: this listing was just closed, so new inquiries can’t be sent.' };
+      const body = TYPES[l.type].inquiry.fields.filter((f) => vals[f.key]).map((f) => `${f.label}: ${vals[f.key]}`).join('\n');
+      return api.openConversation(listingId).then(async (cid) => { await api.postMessage(liveUser.id, cid, body); track('inquiry_sent'); await refreshConvs(liveUser.id); return { convId: cid }; }).catch((e) => ({ error: String(e.message || e) }));
+    }
     if (!l || l.status !== 'published') return { error: 'LISTING_UNAVAILABLE: this listing was just closed, so new inquiries can’t be sent.' };
     const t = TYPES[l.type];
     const body = t.inquiry.fields.filter((f) => vals[f.key]).map((f) => `${f.label}: ${vals[f.key]}`).join('\n');
@@ -1573,14 +1662,15 @@ export default function App() {
     setConvs((c) => [{ id, listingId, me: 'buyer', other: orgs[l.org].name, status: 'open', unread: 0, blocked: false, msgs: [{ from: 'me', at: Date.now(), text: body }] }, ...c]);
     return { convId: id };
   };
-  const sendMsg = (id, text, imgs) => setConvs((c) => c.map((x) => (x.id === id && !x.blocked ? { ...x, msgs: [...x.msgs, { from: 'me', at: Date.now(), text, ...(imgs && imgs.length ? { imgs } : {}) }] } : x)));
-  const markRead = (id) => setConvs((c) => c.map((x) => (x.id === id ? { ...x, unread: 0 } : x)));
-  const setConvStatus = (id, s) => setConvs((c) => c.map((x) => (x.id === id ? { ...x, status: s } : x)));
-  const blockConv = (id) => { setConvs((c) => c.map((x) => (x.id === id ? { ...x, blocked: true, status: 'closed' } : x))); notify('Person blocked'); };
-  const report = (id, reason) => { setReports((r) => [{ id: 'r-' + Date.now(), listingId: id, reason, by: user ? user.email : 'guest', at: Date.now(), status: 'open' }, ...r]); notify('Report sent. Thanks, we’ll review it.'); };
+  const sendMsg = (id, text, imgs) => live ? (setLiveConvs((c) => c.map((x) => (x.id === id ? { ...x, msgs: [...x.msgs, { from: 'me', at: Date.now(), text, ...(imgs && imgs.length ? { imgs } : {}) }] } : x))), api.postMessage(liveUser.id, id, text, imgs).then(() => refreshConvs(liveUser.id)).catch(liveErr)) : setConvs((c) => c.map((x) => (x.id === id && !x.blocked ? { ...x, msgs: [...x.msgs, { from: 'me', at: Date.now(), text, ...(imgs && imgs.length ? { imgs } : {}) }] } : x)));
+  const markRead = (id) => (live ? setLiveConvs : setConvs)((c) => c.map((x) => (x.id === id ? { ...x, unread: 0 } : x)));
+  const setConvStatus = (id, s) => { if (live) api.setConversation(id, { status: s }).catch(liveErr); (live ? setLiveConvs : setConvs)((c) => c.map((x) => (x.id === id ? { ...x, status: s } : x))); };
+  const blockConv = (id) => { if (live) api.setConversation(id, { blocked_by: liveUser.id, status: 'closed' }).catch(liveErr); (live ? setLiveConvs : setConvs)((c) => c.map((x) => (x.id === id ? { ...x, blocked: true, status: 'closed' } : x))); notify('Person blocked'); };
+  const report = (id, reason) => { if (live) { if (!liveUser) { notify('Sign in to report a listing.'); return; } api.addReport(id, reason).then(() => notify('Report sent. Thanks, we’ll review it.')).catch(liveErr); return; } setReports((r) => [{ id: 'r-' + Date.now(), listingId: id, reason, by: user ? user.email : 'guest', at: Date.now(), status: 'open' }, ...r]); notify('Report sent. Thanks, we’ll review it.'); };
   const setStatus = (id, to) => {
-    const l = listings.find((x) => x.id === id);
+    const l = srcListings.find((x) => x.id === id);
     if (!l || !TRANSITIONS[l.status].includes(to)) { notify('That status change isn’t available.'); return; }
+    if (live) { setLiveListings((ls) => ls.map((x) => (x.id === id ? { ...x, status: to } : x))); api.setListingStatus(id, to).then(() => notify(`Listing ${STATUS_LABEL[to].toLowerCase()}`)).catch((e) => { setLiveListings((ls) => ls.map((x) => (x.id === id ? { ...x, status: l.status } : x))); liveErr(e); }); return; }
     const prev = l.status;
     setListings((ls) => ls.map((x) => (x.id === id ? { ...x, status: to, updatedAt: Date.now(), history: [...x.history, { at: Date.now(), to }] } : x)));
     notify(`Listing ${STATUS_LABEL[to].toLowerCase()}`, () => setListings((ls) => ls.map((x) => (x.id === id ? { ...x, status: prev } : x))));
@@ -1589,6 +1679,12 @@ export default function App() {
     const geo = resolveLocation(d.city);
     const { address, ...restF } = d.f;
     const price = d.priceType !== 'undisclosed' && TYPES[d.type].hasPrice && +d.price > 0 ? +d.price : null;
+    if (live) {
+      const draftL = { type: d.type, title: d.title.trim(), desc: d.desc.trim(), geo: { city: geo.city, st: geo.st, lat: geo.lat, lng: geo.lng }, price, priceType: TYPES[d.type].hasPrice ? d.priceType : 'none', f: restF, photos: d.photos };
+      const job = editing ? api.updateListing(liveUser, editing.id, draftL, address).then((x) => { setLiveListings((ls) => ls.map((y) => (y.id === x.id ? x : y))); notify('Changes saved'); return x; })
+        : api.insertListing(liveUser, profile, draftL, address).then(({ listing, org_id }) => { setLiveListings((ls) => [listing, ...ls]); if (!profile || !profile.org_id) { setProfile((p) => ({ ...(p || {}), org_id })); refreshCatalog(liveUser.id).catch(() => {}); } track('listing_published'); notify('Your listing is live'); return listing; });
+      return job.catch((e) => { liveErr(e); return null; });
+    }
     const base = { type: d.type, title: d.title.trim(), desc: d.desc.trim(), geo: { city: geo.city, st: geo.st, lat: geo.lat, lng: geo.lng }, price, priceType: TYPES[d.type].hasPrice ? d.priceType : 'none', f: restF, photos: d.photos, updatedAt: Date.now() };
     if (editing) { setPriv((p) => ({ ...p, [editing.id]: address || '' })); setListings((ls) => ls.map((x) => (x.id === editing.id ? { ...x, ...base, history: [...x.history, { at: Date.now(), to: 'edited' }] } : x))); notify('Changes saved'); return { ...editing, ...base }; }
     const l = { id: ++nextId.current, org: 'dm', mine: true, status: 'published', sponsored: false, createdAt: Date.now(), history: [{ at: Date.now(), to: 'draft' }, { at: Date.now(), to: 'pending_review' }, { at: Date.now(), to: 'published' }], ...base };
@@ -1647,7 +1743,7 @@ export default function App() {
     const h = (e) => { const el = e.target.closest && e.target.closest('a[href^="#/"]'); if (!el || e.defaultPrevented || e.metaKey || e.ctrlKey || e.button) return; e.preventDefault(); go(el.getAttribute('href')); };
     document.addEventListener('click', h); return () => document.removeEventListener('click', h);
   }, [go]);
-  const ctx = { themeSel, seeSearch, listings: allListings, priv, metrics, impr, tickets, track, trackImpr, addTicket, isPro, isAdmin, plan, promos: promosView, verif, reports, events, invoices, audit, views, subscribe, cancelPlan, promote, cancelPromo, confirmPayment, processEvent, submitVerif, decideVerif, decideReport, bumpView, orgs, user, favs, searches, convs, drafts, prefLoc, setPrefLoc, theme, setTheme, unread, notify, requireAuth, signIn, signOut, toggleFav, saveSearch, removeSearch, searchFromText, startInquiry, sendMsg, markRead, setConvStatus, blockConv, report, setStatus, publish, setDraft };
+  const ctx = { themeSel, seeSearch, listings: allListings, priv, metrics, impr, tickets, track, trackImpr, addTicket, isPro, isAdmin, plan, promos: promosView, verif, reports, events, invoices, audit, views, subscribe, cancelPlan, promote, cancelPromo, confirmPayment, processEvent, submitVerif, decideVerif, decideReport, bumpView, orgs, user: curUser, favs: curFavs, searches: curSearches, convs: curConvs, live, mode, sendMagicLink, drafts, prefLoc, setPrefLoc, theme, setTheme, unread, notify, requireAuth, signIn, signOut, toggleFav, saveSearch, removeSearch, searchFromText, startInquiry, sendMsg, markRead, setConvStatus, blockConv, report, setStatus, publish, setDraft };
 
   let view;
   switch (route.name) {
@@ -1667,6 +1763,7 @@ export default function App() {
     case 'account': view = <Account go={go} />; break;
     default: view = <div className="empty"><h1>We couldn’t find that page</h1><p>Check the link, or head back to the listings.</p><a className="btn" href="#/">Keep browsing</a></div>;
   }
+  if (mode === 'checking') view = <div className="grid" aria-busy="true" aria-label="Loading listings">{Array.from({ length: 8 }, (_, i) => <CardSkeleton key={i} />)}</div>;
   return (
     <Ctx.Provider value={ctx}>
       <style>{CSS}</style>
