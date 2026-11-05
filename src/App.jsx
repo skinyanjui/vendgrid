@@ -687,6 +687,7 @@ function Header({ route, go }) {
       <a className="iconbtn menubtn" href="#/post" aria-label="Post listing"><Icon n="plus" /></a>
       <div className="hdr-end">
       <div className="hdr-right" ref={aref} style={{ position: 'relative' }}>
+        <button className="iconbtn themebtn" aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} title={theme === 'dark' ? 'Light mode' : 'Dark mode'} onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}><Icon n={theme === 'dark' ? 'sun' : 'moon'} /></button>
         <a className="btn" href="#/post"><Icon n="plus" size={16} /><span className="plabel">Post listing</span></a>
         <button className="iconbtn" aria-label="Account menu" aria-expanded={acct} onClick={() => setAcct(!acct)}><Icon n="user" />{unread > 0 && <span className="sr">{unread} unread</span>}</button>
         {acct && (
@@ -695,7 +696,7 @@ function Header({ route, go }) {
             <div className="opts">
               {user && <><button role="menuitem" onClick={() => { setAcct(false); go('#/settings'); }}>Settings</button><button role="menuitem" onClick={() => { setAcct(false); go('#/billing'); }}>Billing</button><button role="menuitem" onClick={() => { setAcct(false); go('#/business-settings'); }}>Business settings</button>{isAdmin && <button role="menuitem" onClick={() => { setAcct(false); go('#/admin'); }}>Admin</button>}</>}
               {user ? <button role="menuitem" onClick={() => { signOut(); setAcct(false); go('#/'); }}>Sign out</button> : <button role="menuitem" onClick={() => { setAcct(false); go('#/login'); }}>Sign in</button>}
-              <button role="menuitemcheckbox" aria-checked={theme === 'dark'} className="menuswitch" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}><Icon n="moon" size={16} />Dark mode<span className="switch" aria-hidden="true"><i /></span></button>
+              <button role="menuitemcheckbox" aria-checked={theme === 'dark'} className="menuswitch mobonly" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}><Icon n="moon" size={16} />Dark mode<span className="switch" aria-hidden="true"><i /></span></button>
             </div>
           </div>
         )}
@@ -1865,6 +1866,7 @@ function Login({ route, go }) {
         {emailTypo(email) && <p className="muted" style={{ margin: 0 }} role="status">Did you mean <button type="button" className="linkbtn" onClick={() => { setEmail(emailTypo(email)); setErr(''); }}>{emailTypo(email)}</button>?</p>}
         <button className="btn block" disabled={busy}>{busy ? 'Sending…' : 'Email me a sign-in link'}</button>
         <p className="muted iconline" style={{ fontSize: 12 }}><Icon n="lock" size={14} />No password needed. The link signs you in on this device.</p>
+        <p className="muted" style={{ margin: 0, fontSize: 12 }}>By continuing you confirm you’re 18 or older and agree to the <a className="u" href="#/legal?doc=terms">Terms</a> and <a className="u" href="#/legal?doc=privacy">Privacy policy</a>.</p>
       </form>
     );
   }
@@ -1874,6 +1876,7 @@ function Login({ route, go }) {
       <Field id="em" label="Email" error={err}><input id="em" className={'input full' + (err ? ' bad' : '')} type="email" autoComplete="email" value={email} onChange={(e) => { setEmail(e.target.value); setErr(''); }} /></Field>
       <button className="btn block">Continue</button>
       <p className="muted" style={{ margin: 0, fontSize: 12 }}>Demo sign-in: no password or email is sent. Production uses managed authentication.</p>
+      <p className="muted" style={{ margin: 0, fontSize: 12 }}>By continuing you confirm you’re 18 or older and agree to the <a className="u" href="#/legal?doc=terms">Terms</a> and <a className="u" href="#/legal?doc=privacy">Privacy policy</a>.</p>
     </form>
   );
 }
