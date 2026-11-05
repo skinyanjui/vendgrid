@@ -2193,20 +2193,28 @@ function PasswordField({ id, label, value, onChange, error, hint, autoComplete, 
     </div>
   );
 }
+const AuthBrand = () => <a className="authbrand" href="#/" aria-label="VendGrid home"><BrandMark /><span>VendGrid</span></a>;
 function AuthShell({ children }) {
+  // The left side never changes with the form: same content, same place, whatever the visitor taps on the right.
   return (
-    <div className="authgrid">
+    <div className="authgrid authpage">
       <aside className="authaside" aria-label="About your account">
-        <BrandMark />
-        <h2>One account for buying, selling and talking</h2>
-        <ul>
-          <li><Icon n="heart" size={18} /><span><b>Save</b> listings and searches, and get back to them on any device.</span></li>
-          <li><Icon n="send" size={18} /><span><b>Message</b> sellers. Every conversation stays tied to the listing it is about.</span></li>
-          <li><Icon n="box" size={18} /><span><b>Post</b> machines, parts, locations, routes and services for free.</span></li>
-          <li><Icon n="check" size={18} /><span><b>Verified</b> is earned by review, never bought.</span></li>
-        </ul>
+        <AuthBrand />
+        <div className="authpitch">
+          <h2>One account for buying, selling and talking</h2>
+          <ul>
+            <li><Icon n="heart" size={18} /><span><b>Save</b> listings and searches, and get back to them on any device.</span></li>
+            <li><Icon n="send" size={18} /><span><b>Message</b> sellers. Every conversation stays tied to the listing it is about.</span></li>
+            <li><Icon n="box" size={18} /><span><b>Post</b> machines, parts, locations, routes and services for free.</span></li>
+            <li><Icon n="check" size={18} /><span><b>Verified</b> is earned by review, never bought.</span></li>
+          </ul>
+        </div>
+        <nav className="authlegal" aria-label="Legal"><a href="#/legal?doc=terms">Terms</a><a href="#/legal?doc=privacy">Privacy</a><a href="#/safety">Safety</a></nav>
       </aside>
-      <div className="authmain">{children}</div>
+      <div className="authmain">
+        <div className="authtop"><AuthBrand /></div>
+        <div className="authcol">{children}</div>
+      </div>
     </div>
   );
 }
@@ -2817,16 +2825,17 @@ export default function App() {
     case 'sellers': view = <Sellers />; break;
     default: view = <NotFound go={go} />;
   }
+  const authPage = route.name === 'login' && mode !== 'checking'; // sign-in, create account and reset get their own focused page: no search, no side menu
   if (mode === 'checking') view = <div className="grid" aria-busy="true" aria-label="Loading listings">{Array.from({ length: 8 }, (_, i) => <CardSkeleton key={i} />)}</div>;
   return (
     <Ctx.Provider value={ctx}>
       <style>{CSS}</style>
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap" />
       <button className="skip" onClick={() => { const m = document.getElementById('main'); if (m) m.focus(); }}>Skip to content</button>
-      <Header route={route} go={go} />
-      <div className={'layout' + (mapFull ? ' navoff' : '')}>
-        <Sidebar route={route} />
-        <main className="main" id="main" tabIndex={-1}>{view}<Footer /></main>
+      {!authPage && <Header route={route} go={go} />}
+      <div className={'layout' + (mapFull ? ' navoff' : '') + (authPage ? ' authlayout' : '')}>
+        {!authPage && <Sidebar route={route} />}
+        <main className="main" id="main" tabIndex={-1}>{view}{!authPage && <Footer />}</main>
       </div>
       <TabBar route={route} />
       {toast && <div className={'toast' + (toast.tone ? ' ' + toast.tone : '')} role="status"><span>{toast.msg}</span>{toast.undo && <button onClick={() => { toast.undo(); setToast(null); }}>Undo</button>}</div>}

@@ -923,4 +923,33 @@ a.u{text-decoration:underline;text-underline-offset:2px}
 
 .cities .chip.on .muted{color:inherit;opacity:.9}
 
+/* auth: a focused two-column page. The left panel is fixed to the viewport and the form is anchored to the top, so nothing shifts when the visitor switches tabs or steps */
+:root:has(.authpage){scrollbar-gutter:stable}
+.layout.authlayout{display:block}
+.layout.authlayout .main{max-width:none;padding:0}
+.authgrid{grid-template-columns:minmax(0,1fr);gap:0;max-width:none;margin:0;padding:0;min-height:100vh;min-height:100dvh;align-items:stretch}
+.authmain{flex-direction:column;align-items:center;justify-content:flex-start;padding:0 max(16px,env(safe-area-inset-right)) 48px max(16px,env(safe-area-inset-left))}
+.authtop{align-self:stretch;display:flex;align-items:center;min-height:64px;color:var(--foreground)}
+.authcol{width:100%;max-width:440px}
+.authcol .page.authcard{max-width:none;padding:0}
+@media(min-width:768px){
+  .authgrid{grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:0}
+  .authaside{display:flex;flex-direction:column;background:var(--gray-100);position:sticky;top:0;height:100vh;height:100dvh;border-radius:0;justify-content:space-between;gap:24px;padding:32px 48px;overflow:auto}
+  .authpitch{display:flex;flex-direction:column;gap:20px}
+  .authpitch h2{margin:0;font-size:28px;line-height:34px;letter-spacing:-.02em}
+  .authpitch ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:16px}
+  .authpitch li{display:flex;gap:12px;align-items:flex-start;line-height:22px}
+  .authpitch li svg{flex:none;margin-top:2px;color:var(--blue)}
+  .authlegal{display:flex;gap:16px;font-size:12px}
+  .authlegal a{color:var(--text-muted);text-decoration:underline}
+  .authtop{display:none}
+  .authmain{padding:0 48px 48px}
+  .authcol{padding-top:max(96px,14vh)}
+}
+@media(max-width:767px){.authlegal{display:none}}
+@media(min-width:768px) and (max-width:1023px){.authaside{padding:24px 28px}.authpitch h2{font-size:22px;line-height:28px}.authmain{padding:0 28px 48px}}
+
+.authbrand{display:inline-flex;align-items:center;gap:10px;font-weight:600;font-size:20px;line-height:28px;color:var(--foreground);min-height:44px}
+.authbrand .bmark{width:32px;height:32px}
+
 `;
