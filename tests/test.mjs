@@ -1,0 +1,36 @@
+import { JSDOM } from 'jsdom';
+import fs from 'fs';
+const html = fs.readFileSync(new URL('../dist/index.html', import.meta.url),'utf8');
+const errors=[];
+const dom = new JSDOM('<!doctype html><html><body>'+html+'</body></html>', { runScripts:'dangerously', pretendToBeVisual:true, url:'http://localhost/', beforeParse(w){ w.scrollTo=()=>{}; w.addEventListener('error',e=>errors.push(e.message)); const ce=w.console.error; w.console.error=(...a)=>{errors.push(a.join(' ').slice(0,200))}; }});
+const w = dom.window, d = w.document;
+const sleep = ms=>new Promise(r=>setTimeout(r,ms));
+const nav = async (h)=>{ w.location.hash=h; await sleep(500); };
+const cards = ()=>d.querySelectorAll('article.card').length;
+const click = async (el)=>{ el.dispatchEvent(new w.MouseEvent('click',{bubbles:true})); await sleep(450); };
+await sleep(800);
+console.log('home cards', cards(), '| ctx:', d.querySelector('.ctx')?.textContent.trim().slice(0,70));
+await nav('#/?cat=machines'); console.log('machines', cards(), d.querySelector('.ctx')?.textContent.trim().slice(0,60));
+await nav('#/?cat=machines&pmax=2500'); console.log('machines<=2500', cards());
+await nav('#/?q=route&cat=routes&pmax=100000'); console.log('routes<=100k', cards(), [...d.querySelectorAll('.cprice')].map(x=>x.textContent).join(','));
+await nav('#/?cat=services&loc=Evansville%2C%20IN'); console.log('services Evansville', cards(), [...d.querySelectorAll('.ctitle')].map(x=>x.textContent).join(' | '));
+await nav('#/?q=zzzzqq'); console.log('empty:', d.querySelector('.empty h2')?.textContent);
+await nav('#/?cat=locations'); console.log('locations', cards(), 'sponsored badges', d.querySelectorAll('.badge.sp').length);
+await nav('#/listing/101/ams'); console.log('detail h1:', d.querySelector('h1')?.textContent, '| action:', d.querySelector('.actionpanel .btn')?.textContent);
+await nav('#/listing/111/x'); console.log('sold banner:', d.querySelector('.banner')?.textContent.slice(0,50), '| btn:', d.querySelector('.actionpanel .btn')?.textContent);
+await nav('#/listing/201/x'); console.log('addr leaked?', d.getElementById('root').textContent.includes('Distribution Dr'));
+// auth gate
+await nav('#/listing/101/inquire'); console.log('gate ->', w.location.hash, d.querySelector('h1')?.textContent);
+const em=d.getElementById('em'); const set=Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype,'value').set; set.call(em,'sam@test.com'); em.dispatchEvent(new w.Event('input',{bubbles:true}));
+await sleep(50); d.querySelector('form button.btn').click(); await sleep(500);
+console.log('after login ->', w.location.hash, d.querySelector('h1')?.textContent);
+// submit inquiry
+[...d.querySelectorAll('#q-intent [role=radio]')].find(x=>x.textContent==='Buy this machine').click();
+await sleep(50); d.querySelector('form button.btn.block').click(); await sleep(900);
+console.log('after inquiry ->', w.location.hash, d.querySelector('.thread')?.textContent.slice(0,90));
+await nav('#/my-listings'); console.log('mine rows', d.querySelectorAll('.item').length);
+await nav('#/messages?tab=inquiries'); console.log('inquiries', d.querySelectorAll('.item').length, 'unread badge', d.querySelector('.sidebar .count')?.textContent);
+await nav('#/post?type=machines'); console.log('post h1', d.querySelector('h1')?.textContent);
+d.querySelector('form button.btn.block').click(); await sleep(100); console.log('post errors', d.querySelectorAll('.err').length);
+console.log('JS errors:', errors.length, errors.slice(0,5));
+process.exit(0);
