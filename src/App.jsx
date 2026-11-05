@@ -3,6 +3,8 @@ import React, { useState, useEffect, useRef, useMemo, useCallback, createContext
 import { TYPES, TYPE_KEYS, CITIES, dist, ORGS, SEED, PRIVATE_SEED, TRANSITIONS, STATUS_LABEL, FMT, resolveLocation, suggestLocations, hrefFor, slugify, optionsFor } from './data.js';
 import { PAGE, SORTS, DEFAULT_QUERY, sortOptions, effectiveSort, parseIntent, runSearch, suggest, priceText } from './engine.js';
 import { CSS } from './styles.js';
+import L from 'leaflet';
+import LEAFLET_CSS from 'leaflet/dist/leaflet.css';
 import { Search, MapPin, Heart, Menu, X, Plus, Check, ArrowLeft, Share2, ChevronRight, ChevronLeft, Flag, SlidersHorizontal, Send, User, Package, Route as RouteIcon, Refrigerator, Wrench, ImagePlus, Trash2, Eye, Info, Building2, Sun, Moon, Monitor, Lock, EyeOff, BarChart3, Circle, Cog, Megaphone, Map as MapIcon, LayoutGrid, Paperclip } from 'lucide-react';
 
 /* ───────────── icons (Lucide) ───────────── */
@@ -159,6 +161,48 @@ const shrinkPhoto = (file) => new Promise((res) => {
   img.onerror = () => res(url); img.src = url;
 });
 
+/* OpenStreetMap via Leaflet. Points are city centres only. If tiles can't load (offline, or a host
+   that blocks third-party images) it falls back to the built-in drawing passed as `fallback`. */
+const OSM_TILES = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+const OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
+let leafletCssIn = false;
+function OsmMap({ points, circles = [], selected, onPick, height = 340, zoom, label, fallback }) {
+  const el = useRef(null), map = useRef(null), layer = useRef(null);
+  const [state, setState] = useState('loading');
+  useEffect(() => {
+    if (!leafletCssIn && typeof document !== 'undefined') { const st = document.createElement('style'); st.textContent = LEAFLET_CSS; document.head.appendChild(st); leafletCssIn = true; }
+    let loaded = false, t;
+    try {
+      const m = L.map(el.current, { scrollWheelZoom: false, attributionControl: true, zoomControl: true });
+      m.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>');
+      L.tileLayer(OSM_TILES, { maxZoom: 18, attribution: OSM_ATTR, crossOrigin: true })
+        .on('tileload', () => { if (!loaded) { loaded = true; setState('ok'); } })
+        .addTo(m);
+      layer.current = L.layerGroup().addTo(m);
+      map.current = m;
+      t = setTimeout(() => { if (!loaded) setState('failed'); }, 5000);
+    } catch (e) { setState('failed'); }
+    return () => { clearTimeout(t); try { map.current && map.current.remove(); } catch (e) { /* already gone */ } map.current = null; };
+  }, []);
+  useEffect(() => {
+    const m = map.current, g = layer.current; if (!m || !g) return;
+    g.clearLayers();
+    circles.forEach((c) => L.circle([c.lat, c.lng], { radius: c.radius, color: '#007AFF', weight: 2, dashArray: '6 4', fillOpacity: 0.08 }).addTo(g));
+    points.forEach((p) => {
+      const on = selected != null && p.key === selected;
+      const size = p.count ? Math.round(26 + Math.sqrt(p.count) * 6) : 14;
+      const icon = L.divIcon({ className: 'osm-ico', html: `<span class="osm-pin${on ? ' on' : ''}${p.count ? '' : ' dot'}" style="width:${size}px;height:${size}px">${p.count || ''}</span>`, iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
+      const mk = L.marker([p.lat, p.lng], { icon, keyboard: !!onPick, title: p.label, alt: p.label }).addTo(g);
+      if (p.label) mk.bindTooltip(p.label, { direction: 'bottom', offset: [0, size / 2], permanent: !!p.count || !!p.always, className: 'osm-tip' });
+      if (onPick) mk.on('click', () => onPick(p.key));
+    });
+    const all = [...points.map((p) => [p.lat, p.lng]), ...circles.flatMap((c) => { const d = c.radius / 111320; return [[c.lat + d, c.lng], [c.lat - d, c.lng]]; })];
+    if (all.length === 1 || zoom) m.setView(all[0], zoom || 10); else if (all.length) m.fitBounds(all, { padding: [36, 36], maxZoom: 10 });
+  }, [points, circles, selected]);
+  if (state === 'failed' && fallback) return fallback;
+  return <div className="osm" style={{ height }}><div ref={el} className="osm-map" role="region" aria-label={label} /></div>;
+}
+
 /* Results map: city-level bubbles from real coordinates (no tiles, no addresses). Tap a city to see its listings. */
 function ResultsMap({ items, showType }) {
   const groups = useMemo(() => {
@@ -167,6 +211,7 @@ function ResultsMap({ items, showType }) {
     return Object.values(m).sort((a, b) => b.items.length - a.items.length);
   }, [items]);
   const [sel, setSel] = useState(null);
+  const pts = useMemo(() => groups.map((g) => ({ key: g.key, lat: g.lat, lng: g.lng, count: g.items.length, label: g.city })), [groups]);
   const cur = groups.find((g) => g.key === sel) || groups[0];
   if (!groups.length) return null;
   const narrow = typeof window !== 'undefined' && window.innerWidth < 600;
@@ -181,7 +226,9 @@ function ResultsMap({ items, showType }) {
   return (
     <div className="rmap">
       <div className="rmap-frame">
-        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Map of ${items.length} listings across ${groups.length} cities`}>
+        <OsmMap label={`Map of ${items.length} listings across ${groups.length} cities`} height={narrow ? 300 : 380} selected={cur.key} onPick={setSel}
+          points={pts}
+          fallback={<svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Map of ${items.length} listings across ${groups.length} cities`}>
           <rect width={W} height={H} className="am-bg" />
           {Array.from({ length: 9 }, (_, i) => <line key={'v' + i} x1={(W / 8) * i} y1="0" x2={(W / 8) * i} y2={H} className="rm-grid" />)}
           {Array.from({ length: 5 }, (_, i) => <line key={'h' + i} x1="0" y1={(H / 4) * i} x2={W} y2={(H / 4) * i} className="rm-grid" />)}
@@ -193,7 +240,7 @@ function ResultsMap({ items, showType }) {
               <text x={p.x} y={p.y + 4} textAnchor="middle" className="rm-n">{g.items.length}</text>
               <text x={p.x} y={ly} textAnchor="middle" className="rm-l">{g.city}</text>
             </g>); })}
-        </svg>
+        </svg>} />
       </div>
       <Seg label="City" size="wrap" options={groups.map((g) => [g.key, `${g.city} · ${g.items.length}`])} value={cur.key} onChange={setSel} />
       <p className="muted iconline" style={{ fontSize: 12 }}><Icon n="pin" size={13} />Pins sit at the city centre. Exact addresses are never shown.</p>
@@ -231,22 +278,25 @@ function Gallery({ l }) {
 /* Approximate-area map drawn from real city coordinates. No tiles, no exact address: only the city centre and nearby cities. */
 function AreaMap({ l }) {
   const g = l.geo;
-  if (g.lat == null || g.lng == null) return null;
   const cov = l.type === 'services' && l.f.coverage ? Number(l.f.coverage) : 0;
+  const mePts = useMemo(() => [{ key: 'me', lat: g.lat, lng: g.lng, label: `${g.city}, ${g.st}`, always: true }], [g.lat, g.lng]);
+  const meCirc = useMemo(() => [{ lat: g.lat, lng: g.lng, radius: cov ? cov * 1609.34 : 12000 }], [g.lat, g.lng, cov]);
   const near = CITIES.filter((c) => !(c.city === g.city && c.st === g.st)).map((c) => ({ c, d: dist(g, c) })).sort((a, b) => a.d - b.d).slice(0, 4);
   const span = Math.max(40, cov * 1.15, ...near.map((x) => x.d)) * 1.1;
   const W = 320, H = 180, k = (Math.min(W, H) / 2 - 14) / span, mi = Math.cos(g.lat * Math.PI / 180) * 69.17;
   const pos = (c) => ({ x: W / 2 + (c.lng - g.lng) * mi * k, y: H / 2 - (c.lat - g.lat) * 69 * k });
   const label = cov ? `Service area: about ${cov} miles around ${g.city}, ${g.st}` : `Approximate area: ${g.city}, ${g.st}`;
   return (
-    <figure className="areamap">
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${label}. Nearest cities: ${near.map((x) => `${x.c.city} ${Math.round(x.d)} miles`).join(', ')}.`}>
+    g.lat == null || g.lng == null ? null : <figure className="areamap">
+      <OsmMap label={label} height={240} zoom={cov ? undefined : 9}
+        points={mePts} circles={meCirc}
+        fallback={<svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${label}. Nearest cities: ${near.map((x) => `${x.c.city} ${Math.round(x.d)} miles`).join(', ')}.`}>
         <rect width={W} height={H} className="am-bg" />
         {[0.5, 1].map((f) => <circle key={f} cx={W / 2} cy={H / 2} r={Math.min(W, H) / 2 * 0.86 * f} className="am-ring" />)}
         {cov > 0 && <circle cx={W / 2} cy={H / 2} r={cov * k} className="am-cov" />}
         {near.map(({ c, d }) => { const q = pos(c); return q.x > 8 && q.x < W - 8 && q.y > 8 && q.y < H - 8 ? <g key={c.city}><circle cx={q.x} cy={q.y} r="3" className="am-dot" /><text x={q.x + 6} y={q.y + 3.500} className="am-txt">{c.city} · {Math.round(d)} mi</text></g> : null; })}
         <circle cx={W / 2} cy={H / 2} r="7" className="am-me" /><circle cx={W / 2} cy={H / 2} r="2.500" className="am-mec" />
-      </svg>
+      </svg>} />
       <figcaption><b>{label}</b><span className="muted">{l.type === 'locations' ? 'The street address is shared by the host after they respond.' : 'Shown at the city centre, not an exact address.'}</span></figcaption>
     </figure>
   );
