@@ -648,4 +648,10 @@ label.btn.disabled{opacity:.6;pointer-events:none}
 
 @media (pointer:coarse){.seg [role=radio],.seg.wrap [role=radio]{min-height:44px}}
 
+/* the view toggle is the same height as the other toolbar controls */
+.bar .viewtgl{height:32px;box-sizing:border-box;align-items:stretch}
+.bar .viewtgl button{height:auto;width:32px}
+@media(pointer:coarse),(max-width:767px){.bar .viewtgl{height:44px}.bar .viewtgl button{width:40px}}
+@media(max-width:560px){.bar .viewtgl button{width:38px}}
+
 `;
