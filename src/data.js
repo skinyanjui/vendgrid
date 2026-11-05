@@ -85,7 +85,8 @@ export const TYPES = {
       ],
     },
     fields: [
-      { key: 'machineType', label: 'Machine type', kind: 'select', required: true, essential: true, options: ['Snack', 'Cold drink', 'Combo', 'Coffee', 'Frozen / ice cream', 'Fresh food', 'Locker'] },
+      { key: 'machineType', label: 'Machine type', kind: 'select', required: true, essential: true, options: ['Snack', 'Cold drink', 'Combo', 'Coffee', 'Frozen / ice cream', 'Fresh food', 'Locker', 'Micro market', 'AI cooler'] },
+      { key: 'sellerType', label: 'Who’s selling', kind: 'select', required: true, essential: true, options: ['Manufacturer / authorized dealer', 'Refurbisher', 'Operator', 'Individual'] },
       { key: 'manufacturer', label: 'Manufacturer', kind: 'select', required: true, essential: true, options: MANUFACTURERS, allowOther: true },
       { key: 'model', label: 'Model', kind: 'text', required: true, essential: true },
       { key: 'condition', label: 'Condition', kind: 'select', required: true, essential: true, options: ['New', 'Refurbished', 'Used', 'For parts'] },
@@ -95,7 +96,10 @@ export const TYPES = {
       { key: 'capacity', label: 'Capacity', kind: 'text' },
       { key: 'power', label: 'Power requirements', kind: 'text' },
       { key: 'status', label: 'Operational status', kind: 'select', options: ['Operational', 'Needs minor repair', 'Not working'] },
-      { key: 'warranty', label: 'Warranty terms', kind: 'text' },
+      { key: 'warranty', label: 'Warranty terms', kind: 'text', essential: true, hint: 'Leave blank if sold as-is' },
+      { key: 'service', label: 'Repair & service history', kind: 'textarea', essential: true, hint: 'What was fixed or replaced, and when' },
+      { key: 'returns', label: 'Returns', kind: 'select', options: ['No returns (as-is)', 'Returns if not as described', '7-day returns', '30-day returns'] },
+      { key: 'shipCost', label: 'Delivery or shipping cost', kind: 'text', hint: 'e.g. Free within 25 mi, or quoted by freight' },
       { key: 'inventory', label: 'Inventory included', kind: 'text' },
       { key: 'defects', label: 'Known defects', kind: 'textarea' },
     ],
@@ -105,6 +109,8 @@ export const TYPES = {
       { key: 'condition', label: 'Condition', kind: 'select' },
       { key: 'payment', label: 'Payment system', kind: 'select' },
       { key: 'delivery', label: 'Delivery', kind: 'select' },
+      { key: 'sellerType', label: 'Who’s selling', kind: 'select' },
+      { key: 'hasWarranty', label: 'Warranty', kind: 'select', options: ['Includes a warranty'], test: (l) => !!(l.f.warranty && String(l.f.warranty).trim()) },
       { key: 'price', label: 'Price', kind: 'price' },
     ],
     meta: (l) => [l.f.condition, l.f.payment === 'Cash only' ? 'Cash only' : l.f.payment].filter(Boolean).slice(0, 2),
@@ -187,9 +193,15 @@ export const TYPES = {
     fields: [
       { key: 'businessType', label: 'Business type', kind: 'select', required: true, essential: true, options: ['Snack & drink', 'Combo machines', 'Coffee / micro market', 'Specialty'] },
       { key: 'machineCount', label: 'Number of machines', kind: 'number', required: true, essential: true, min: 1 },
+      { key: 'locationCount', label: 'Number of locations', kind: 'number', essential: true, min: 1, hint: 'One location or many?' },
+      { key: 'locationTypes', label: 'Location types', kind: 'multi', essential: true, options: ['Office', 'Industrial', 'Residential', 'Hospitality', 'Educational', 'Healthcare', 'Retail'] },
+      { key: 'equipment', label: 'Equipment included', kind: 'multi', essential: true, options: ['Snack machines', 'Beverage machines', 'Combo machines', 'Coffee', 'Micro market', 'AI cooler'] },
       { key: 'scope', label: 'Sale scope', kind: 'select', required: true, essential: true, options: ['Machines only', 'Machines + location contracts', 'Full business + training'] },
       { key: 'revenueBand', label: 'Annual gross revenue', kind: 'select', essential: true, hostReported: true, options: ['Not disclosed', 'Under $50k', '$50k–$100k', '$100k–$250k', '$250k+'] },
       { key: 'period', label: 'Revenue reporting period', kind: 'text', hostReported: true },
+      { key: 'cashFlow', label: 'Annual cash flow (owner earnings)', kind: 'select', hostReported: true, options: ['Not disclosed', 'Under $25k', '$25k–$50k', '$50k–$100k', '$100k+'] },
+      { key: 'contracts', label: 'Location agreements', kind: 'select', options: ['Written agreements, transferable', 'Written agreements', 'Verbal / handshake', 'Mixed'] },
+      { key: 'reason', label: 'Reason for selling', kind: 'text' },
       { key: 'ownership', label: 'Machine ownership', kind: 'select', options: ['Owned', 'Leased', 'Mixed'] },
       { key: 'travel', label: 'Route travel requirements', kind: 'text' },
       { key: 'inventory', label: 'Inventory included', kind: 'text' },
@@ -200,8 +212,10 @@ export const TYPES = {
       { key: 'machineBand', label: 'Machine count', kind: 'select', options: ['1–10', '11–25', '26+'], test: (l, v) => { const n = +l.f.machineCount; return v === '1–10' ? n <= 10 : v === '11–25' ? n >= 11 && n <= 25 : n >= 26; } },
       { key: 'revenueBand', label: 'Disclosed revenue', kind: 'select' },
       { key: 'businessType', label: 'Business type', kind: 'select' },
+      { key: 'locationTypes', label: 'Location type', kind: 'multi', options: ['Office', 'Industrial', 'Residential', 'Hospitality', 'Educational', 'Healthcare', 'Retail'] },
+      { key: 'equipment', label: 'Equipment', kind: 'multi', options: ['Snack machines', 'Beverage machines', 'Combo machines', 'Coffee', 'Micro market', 'AI cooler'] },
     ],
-    meta: (l) => [`${l.f.machineCount} machines`, l.f.revenueBand && l.f.revenueBand !== 'Not disclosed' ? 'Revenue disclosed' : 'Revenue not disclosed'],
+    meta: (l) => [`${l.f.machineCount} machines${l.f.locationCount ? ` · ${l.f.locationCount} ${+l.f.locationCount === 1 ? 'location' : 'locations'}` : ''}`, l.f.revenueBand && l.f.revenueBand !== 'Not disclosed' ? 'Revenue disclosed' : 'Revenue not disclosed'],
   },
   services: {
     label: 'Services', singular: 'Service', action: 'Get a quote', actionDone: 'Quote requested',
@@ -350,6 +364,26 @@ export const SEED = [
   L(901, 'machines', 'dm', 'Seaga HY900 Combo — sold last month', 'Evansville, IN', 30, 3300, { machineType: 'Combo', manufacturer: 'Seaga', model: 'HY900', condition: 'Used', payment: 'Cash only', delivery: 'Pickup only' }, 'Sold.', { status: 'sold' }),
   L(902, 'services', 'dm', 'Weekend restocking help', 'Evansville, IN', 17, null, { serviceType: 'Supply / restock', coverage: 40, availability: 'Scheduled', rate: '$25/hr' }, 'Reliable weekend route restocking for small operators.', { status: 'paused' }),
 ];
+/* Extra detail on the sample listings (seller type, service history, route specifics) */
+const EXTRA = {
+  101: { sellerType: 'Refurbisher', service: 'New coin mech spring 2026. Spirals checked and straightened.', returns: 'Returns if not as described', shipCost: 'Free within 25 mi of Evansville' },
+  102: { sellerType: 'Refurbisher', service: 'Shop refurbished: new door gaskets, evaporator cleaned, cooling recalibrated.', returns: '7-day returns', shipCost: 'Freight quoted per destination' },
+  103: { sellerType: 'Operator', service: 'Serviced monthly on our route. Card reader active until sale.', returns: 'No returns (as-is)', shipCost: 'Pickup only' },
+  105: { sellerType: 'Refurbisher', service: 'Refurbished with cashless reader and telemetry mount installed.', returns: '30-day returns', shipCost: 'Free within 40 mi of Indianapolis' },
+  106: { sellerType: 'Operator', returns: 'No returns (as-is)', shipCost: 'Pickup only' },
+  107: { sellerType: 'Operator', service: 'Both units working on location until last month.', returns: 'No returns (as-is)', shipCost: 'Pickup only' },
+  108: { sellerType: 'Manufacturer / authorized dealer', service: 'Never placed. Factory packing and manual included.', returns: '30-day returns', shipCost: 'Freight quoted per destination' },
+  109: { sellerType: 'Refurbisher', service: 'Compressor failed. Control board bench-tested good.', returns: 'No returns (as-is)', shipCost: 'Pickup only' },
+  110: { sellerType: 'Operator', service: 'Reliable on our route; no repairs in the last year.', returns: 'No returns (as-is)', shipCost: 'Free within 40 mi' },
+  111: { sellerType: 'Refurbisher' },
+  301: { locationCount: 11, locationTypes: ['Office', 'Industrial'], equipment: ['Snack machines', 'Beverage machines'], cashFlow: '$25k–$50k', contracts: 'Written agreements, transferable', reason: 'Owner moving out of state' },
+  302: { locationCount: 9, locationTypes: ['Office', 'Industrial'], equipment: ['Snack machines', 'Beverage machines'], cashFlow: 'Under $25k', contracts: 'Written agreements', reason: 'Owner retiring' },
+  303: { locationCount: 6, locationTypes: ['Office', 'Healthcare'], equipment: ['Coffee', 'Micro market'], cashFlow: '$50k–$100k', contracts: 'Written agreements, transferable', reason: 'Focusing on a larger territory' },
+  304: { locationCount: 22, locationTypes: ['Industrial', 'Residential', 'Educational'], equipment: ['Combo machines', 'Beverage machines', 'AI cooler'], cashFlow: 'Not disclosed', contracts: 'Mixed' },
+  305: { locationCount: 4, locationTypes: ['Office', 'Hospitality'], equipment: ['Snack machines', 'Beverage machines'], cashFlow: 'Under $25k', contracts: 'Verbal / handshake', reason: 'Selling to fund a new business' },
+};
+SEED.forEach((l) => { if (EXTRA[l.id]) l.f = { ...l.f, ...EXTRA[l.id] }; });
+
 /* Demo photos (supplied by the owner) — matched to each machine or route by type */
 const PHOTO = { 101: ['snack', 'snack2'], 102: ['drink', 'drink2'], 103: ['combo3', 'combo'], 104: ['drink2'], 105: ['smart', 'smart2', 'combo2'], 106: ['coffee', 'coffee2'], 107: ['snack2'], 108: ['fresh', 'fresh2'], 109: ['frozen', 'frozen2'], 110: ['snack'], 111: ['combo4', 'combo2'], 901: ['combo4'], 301: ['combo', 'snack', 'drink'], 302: ['snack2'], 303: ['coffee2', 'fresh2', 'coffee'], 304: ['industrial', 'workplace', 'drink', 'smart'], 305: ['healthy2', 'healthy'], 501: ['p-coinmech', 'p-coinmech2'], 502: ['p-validator', 'p-validator2'], 503: ['p-spiral', 'p-spiral2'], 504: ['p-board'], 506: ['p-board2'], 505: ['p-lock', 'p-lock2'], 201: ['loc-break1', 'loc-break5'], 202: ['loc-break4', 'loc-break3'], 203: ['loc-break5', 'loc-break1'], 204: ['loc-break2', 'loc-break3'], 205: ['loc-break3', 'loc-break2', 'loc-break4'], 206: ['loc-break1', 'loc-break4'], 401: ['svc-repair'], 402: ['svc-delivery', 'svc-install'], 403: ['svc-cashless'], 404: ['svc-install', 'svc-delivery'], 405: ['svc-supply'], 902: ['svc-supply'] };
 SEED.forEach((l) => { if (PHOTO[l.id]) l.photos = PHOTO[l.id].map((n) => 'img/' + n + '.jpg'); });

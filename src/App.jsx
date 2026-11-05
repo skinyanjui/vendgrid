@@ -6,10 +6,10 @@ import { CSS } from './styles.js';
 import * as api from './backend.js';
 import L from 'leaflet';
 import LEAFLET_CSS from 'leaflet/dist/leaflet.css';
-import { Search, MapPin, Heart, Menu, X, Plus, Check, ArrowLeft, Share2, ChevronRight, ChevronLeft, Flag, SlidersHorizontal, Send, User, Package, Route as RouteIcon, Refrigerator, Wrench, ImagePlus, Trash2, Eye, Info, Building2, Sun, Moon, Monitor, Lock, EyeOff, BarChart3, Circle, Cog, Megaphone, Map as MapIcon, LayoutGrid, Paperclip } from 'lucide-react';
+import { Search, MapPin, Heart, Menu, X, Plus, Check, ArrowLeft, Share2, ChevronRight, ChevronLeft, Flag, SlidersHorizontal, Send, User, Package, Route as RouteIcon, Refrigerator, Wrench, ImagePlus, Trash2, Eye, Info, Building2, Sun, Moon, Monitor, Lock, EyeOff, BarChart3, Circle, Cog, BookOpen, AlertTriangle, Megaphone, Map as MapIcon, LayoutGrid, Paperclip } from 'lucide-react';
 
 /* ───────────── icons (Lucide) ───────────── */
-const LI = { search: Search, pin: MapPin, heart: Heart, menu: Menu, x: X, plus: Plus, check: Check, back: ArrowLeft, share: Share2, chev: ChevronRight, left: ChevronLeft, flag: Flag, sliders: SlidersHorizontal, send: Send, user: User, box: Package, route: RouteIcon, machine: Refrigerator, wrench: Wrench, image: ImagePlus, trash: Trash2, eye: Eye, info: Info, building: Building2, sun: Sun, moon: Moon, auto: Monitor, cog: Cog, megaphone: Megaphone, map: MapIcon, grid: LayoutGrid, clip: Paperclip, lock: Lock, eyeoff: EyeOff, chart: BarChart3, circle: Circle };
+const LI = { search: Search, pin: MapPin, heart: Heart, menu: Menu, x: X, plus: Plus, check: Check, back: ArrowLeft, share: Share2, chev: ChevronRight, left: ChevronLeft, flag: Flag, sliders: SlidersHorizontal, send: Send, user: User, box: Package, route: RouteIcon, machine: Refrigerator, wrench: Wrench, image: ImagePlus, trash: Trash2, eye: Eye, info: Info, building: Building2, sun: Sun, moon: Moon, auto: Monitor, cog: Cog, book: BookOpen, alert: AlertTriangle, megaphone: Megaphone, map: MapIcon, grid: LayoutGrid, clip: Paperclip, lock: Lock, eyeoff: EyeOff, chart: BarChart3, circle: Circle };
 const CAT_ICON = { wanted: 'megaphone', machines: 'machine', parts: 'cog', locations: 'building', routes: 'route', services: 'wrench' };
 const Icon = ({ n, size = 20, stroke = 2 }) => { const C = LI[n]; return C ? <C className={'icon i-' + n} size={size} strokeWidth={stroke} aria-hidden="true" style={{ width: size, height: size }} /> : null; };
 
@@ -60,6 +60,7 @@ export function parseHash(h) {
     case 'business-settings': return { name: 'bizsettings' };
     case 'admin': return { name: 'admin', tab: sp.get('tab') || 'verification' };
     case 'account': case 'menu': return { name: 'account' };
+    case 'guide': return { name: 'guide', topic: sp.get('t') || 'machines' };
     default: return { name: 'notfound' };
   }
 }
@@ -93,7 +94,7 @@ export function fromAddr(a) {
   if ((m = s.match(/^s-([0-9a-f]+)$/))) return '#/?' + fromHex(m[1]);
   if (s === 'menu') return '#/account';
   if (s === 'my-listings') return '#/my-listings';
-  if (['post', 'saved', 'messages', 'login', 'account', 'billing', 'admin', 'legal'].includes(s)) return '#/' + s;
+  if (['post', 'saved', 'messages', 'login', 'account', 'billing', 'admin', 'legal', 'guide'].includes(s)) return '#/' + s;
   return '#/';
 }
 
@@ -251,6 +252,118 @@ function ResultsMap({ items, showType }) {
       <Seg label="City" size="wrap" options={groups.map((g) => [g.key, `${g.city} · ${g.items.length}`])} value={cur.key} onChange={setSel} />
       <p className="muted iconline" style={{ fontSize: 12 }}><Icon n="pin" size={13} />Pins sit at the city centre. Exact addresses are never shown.</p>
       <div className="grid">{cur.items.map((l) => <ListingCard key={l.id} l={l} showType={showType} />)}</div>
+    </div>
+  );
+}
+
+/* Price context: what similar machines on VendGrid are listed for, and a nudge when a price is far below them */
+const priced = (ls) => ls.filter((x) => x.status === 'published' && x.price != null);
+const median = (a) => { const b = [...a].sort((x, y) => x - y); const m = Math.floor(b.length / 2); return b.length % 2 ? b[m] : (b[m - 1] + b[m]) / 2; };
+function PriceCheck({ l, listings }) {
+  if (l.type !== 'machines' || l.price == null) return null;
+  const others = priced(listings).filter((x) => x.type === 'machines' && x.id !== l.id && x.f.condition !== 'For parts');
+  const typed = others.filter((x) => x.f.machineType === l.f.machineType);
+  const same = typed.length >= 2 ? typed : others, kind = typed.length >= 2 ? l.f.machineType.toLowerCase() + ' ' : '';
+  if (same.length < 2) return null;
+  const ps = same.map((x) => x.price), lo = Math.min(...ps), hi = Math.max(...ps), med = median(ps);
+  const low = l.f.condition !== 'For parts' && l.price < med * 0.4;
+  return (
+    <div className={'pricecheck' + (low ? ' warn' : '')}>
+      {low && <p className="iconline" style={{ margin: 0 }}><Icon n="alert" size={16} /><b>Priced well below similar listings.</b> See it working before you pay.</p>}
+      <div className="pc-bar" aria-label={`Other ${kind}machines on VendGrid are listed from ${FMT(lo)} to ${FMT(hi)}`}>
+        <span className="pc-range" /><span className="pc-me" style={{ left: `${Math.max(0, Math.min(100, ((l.price - lo) / Math.max(1, hi - lo)) * 100))}%` }} title="This listing" />
+      </div>
+      <div className="pc-legend"><span>{FMT(lo)}</span><span className="muted">This listing vs {same.length} other {kind}machines</span><span>{FMT(hi)}</span></div>
+    </div>
+  );
+}
+
+/* What a buyer should confirm before paying — shows which items this listing already answers */
+function BuyerChecklist({ l, onAsk }) {
+  if (l.type === 'machines') {
+    const items = [['Condition', l.f.condition], ['Age', l.f.year ? `Built ${l.f.year}` : ''], ['Payment system', l.f.payment], ['Repair & service history', l.f.service], ['Warranty', l.f.warranty], ['Returns', l.f.returns], ['Delivery cost', l.f.shipCost]];
+    const missing = items.filter(([, v]) => !v).length;
+    return (
+      <section className="panel checkpanel">
+        <div className="row2" style={{ justifyContent: 'space-between' }}><h3>Before you buy</h3><a className="btn ghost sm" href="#/guide?t=machines"><Icon n="book" size={16} />Buyer’s guide</a></div>
+        <ul className="checklist wide">{items.map(([k, v]) => <li key={k} className={v ? 'ok' : ''}><Icon n={v ? 'check' : 'circle'} size={16} /><span><b>{k}</b>{v ? <span className="muted">{String(v)}</span> : <span className="muted">Not stated</span>}</span></li>)}</ul>
+        {missing > 0 && onAsk && <button className="btn secondary sm" onClick={onAsk}>Ask the seller about {missing === 1 ? 'this' : `these ${missing}`}</button>}
+      </section>
+    );
+  }
+  if (l.type === 'routes') {
+    const items = [['Financials', l.f.revenueBand && l.f.revenueBand !== 'Not disclosed' ? `${l.f.revenueBand} revenue${l.f.cashFlow && l.f.cashFlow !== 'Not disclosed' ? ` · ${l.f.cashFlow} cash flow` : ''} (seller-reported)` : ''], ['Location agreements', l.f.contracts], ['Equipment', (l.f.equipment || []).join(', ')], ['Machine ownership', l.f.ownership], ['Reason for selling', l.f.reason], ['Training & handover', l.f.transition]];
+    return (
+      <section className="panel checkpanel">
+        <div className="row2" style={{ justifyContent: 'space-between' }}><h3>Before you buy this route</h3><a className="btn ghost sm" href="#/guide?t=routes"><Icon n="book" size={16} />Route guide</a></div>
+        <ul className="checklist wide">{items.map(([k, v]) => <li key={k} className={v ? 'ok' : ''}><Icon n={v ? 'check' : 'circle'} size={16} /><span><b>{k}</b><span className="muted">{v || 'Not stated'}</span></span></li>)}</ul>
+        <p className="muted iconline" style={{ fontSize: 12 }}><Icon n="alert" size={14} />Don’t contact the route’s locations or customers until the seller says you can. Verify every figure, contract and expense yourself.</p>
+      </section>
+    );
+  }
+  return null;
+}
+
+/* Buyer's guide: each common question answered with live numbers and a link to the matching search */
+function Guide({ route, go }) {
+  const { listings, orgs } = useApp();
+  const topic = route.topic === 'routes' ? 'routes' : 'machines';
+  const M = priced(listings).filter((x) => x.type === 'machines');
+  const by = (c) => M.filter((x) => x.f.condition === c).map((x) => x.price);
+  const rng = (a) => (a.length ? (a.length === 1 ? FMT(a[0]) : `${FMT(Math.min(...a))}–${FMT(Math.max(...a))}`) : '—');
+  const count = (pred) => listings.filter((x) => x.status === 'published' && pred(x)).length;
+  const q = (f, extra = {}) => encodeQuery({ ...DEFAULT_QUERY, f, cat: 'machines', ...extra });
+  const QA = ({ title, children }) => <section className="qa"><h2>{title}</h2>{children}</section>;
+  const Go = ({ href, n, children }) => <a className="btn secondary sm" href={href}>{children}{n != null && <span className="fcount" style={{ marginLeft: 6 }}>{n}</span>}</a>;
+  return (
+    <div className="page guide">
+      <div><h1>Buyer’s guide</h1><Seg label="Guide" options={[['machines', 'Machines'], ['routes', 'Routes']]} value={topic} onChange={(v) => go('#/guide?t=' + v, true)} /></div>
+      {topic === 'machines' ? (<>
+        <QA title="What does a vending machine cost?">
+          <div className="pricegrid">{['New', 'Refurbished', 'Used', 'For parts'].map((c) => <a key={c} className="pg" href={q({ condition: c })}><span className="muted">{c}</span><b>{rng(by(c))}</b><small>{by(c).length} listed</small></a>)}</div>
+          <p className="muted" style={{ margin: 0, fontSize: 12 }}>Asking prices on VendGrid right now. Prices change as listings come and go.</p>
+        </QA>
+        <QA title="New, refurbished or used?">
+          <p>New machines cost the most but come with a manufacturer warranty and the latest payment options. Refurbished units are cleaned, repaired and tested by a pro, often with a short warranty. Used machines cost least and may need repairs.</p>
+          <div className="row2" style={{ flexWrap: 'wrap' }}><Go href={q({ condition: 'New' })} n={count((x) => x.type === 'machines' && x.f.condition === 'New')}>New</Go><Go href={q({ condition: 'Refurbished' })} n={count((x) => x.type === 'machines' && x.f.condition === 'Refurbished')}>Refurbished</Go><Go href={q({ condition: 'Used' })} n={count((x) => x.type === 'machines' && x.f.condition === 'Used')}>Used</Go></div>
+        </QA>
+        <QA title="Where do I find a seller I can trust?">
+          <p>Look for the green check: that business passed VendGrid’s checks. You can also filter by who’s selling.</p>
+          <div className="row2" style={{ flexWrap: 'wrap' }}><Go href={q({}, { verified: '1' })} n={count((x) => x.type === 'machines' && orgs[x.org].verified)}><Icon n="check" size={14} />Verified sellers</Go><Go href={q({ sellerType: 'Manufacturer / authorized dealer' })}>Dealers</Go><Go href={q({ sellerType: 'Refurbisher' })}>Refurbishers</Go><Go href={q({ sellerType: 'Operator' })}>Other operators</Go></div>
+        </QA>
+        <QA title="What should I check on a used machine?">
+          <ul className="checklist wide">{['Condition and age', 'Payment system (cash, card reader, cashless ready)', 'Repair and service history', 'Warranty or service contract', 'Returns and delivery cost'].map((x) => <li key={x} className="ok"><Icon n="check" size={16} /><span>{x}</span></li>)}</ul>
+          <p className="muted" style={{ margin: 0 }}>Every machine listing shows these as a “Before you buy” checklist, and marks anything the seller hasn’t stated.</p>
+        </QA>
+        <QA title="Do machines come with a warranty?">
+          <p>New machines usually do. Refurbished machines may include limited cover. Used machines are often sold as-is.</p>
+          <Go href={q({ hasWarranty: 'Includes a warranty' })} n={count((x) => x.type === 'machines' && x.f.warranty)}>Machines with a warranty</Go>
+        </QA>
+        <QA title="Can I negotiate?">
+          <p>Often, especially with operators and refurbishers. Choose “Make an offer” when you contact a seller.</p>
+        </QA>
+        <QA title="Is buying online safe?">
+          <ul className="checklist wide">{['Message through VendGrid so there’s a record', 'See the machine working before you pay', 'Never wire money or pay with gift cards', 'Be wary of prices far below similar listings', 'Report anything that looks wrong'].map((x) => <li key={x} className="ok"><Icon n="check" size={16} /><span>{x}</span></li>)}</ul>
+        </QA>
+        <QA title="Can I buy locally, or from another operator?">
+          <div className="row2" style={{ flexWrap: 'wrap' }}><Go href={q({}, { view: 'map' })}><Icon n="map" size={14} />Machines on the map</Go><Go href={q({ sellerType: 'Operator' })} n={count((x) => x.type === 'machines' && x.f.sellerType === 'Operator')}>From operators</Go><Go href={encodeQuery({ ...DEFAULT_QUERY, f: {}, cat: 'services', q: 'delivery' })}>Delivery services</Go></div>
+        </QA>
+      </>) : (<>
+        <QA title="Why buy an existing route?">
+          <p>You start with placed machines, location agreements and revenue from day one, instead of finding locations one by one.</p>
+          <Go href={encodeQuery({ ...DEFAULT_QUERY, f: {}, cat: 'routes' })} n={count((x) => x.type === 'routes')}>Routes for sale</Go>
+        </QA>
+        <QA title="What should I verify?">
+          <ul className="checklist wide">{['Revenue and cash flow, against bank statements', 'Location agreements: written, and transferable to you', 'Equipment age, condition and ownership (owned or leased)', 'Expenses: product, fuel, card fees, commissions', 'Why the owner is selling, and what training they’ll give'].map((x) => <li key={x} className="ok"><Icon n="check" size={16} /><span>{x}</span></li>)}</ul>
+          <p className="muted" style={{ margin: 0 }}>Revenue on VendGrid is reported by the seller and isn’t verified. Ask for documents under a confidentiality agreement.</p>
+        </QA>
+        <QA title="Can I contact the locations?">
+          <p>Not until the seller agrees. Reaching out to a route’s customers early can cost the seller the account.</p>
+        </QA>
+        <QA title="Single location or many?">
+          <div className="row2" style={{ flexWrap: 'wrap' }}>{[['1–10', 'Up to 10 machines'], ['11–25', '11–25 machines'], ['26+', '26+ machines']].map(([v, t]) => <Go key={v} href={encodeQuery({ ...DEFAULT_QUERY, f: { machineBand: v }, cat: 'routes' })}>{t}</Go>)}</div>
+        </QA>
+      </>)}
     </div>
   );
 }
@@ -514,7 +627,7 @@ const NAV = [
   ['', 'Explore', 'search'], ['machines', 'Machines', 'machine'], ['parts', 'Parts', 'cog'], ['locations', 'Locations', 'building'], ['routes', 'Routes', 'route'], ['services', 'Services', 'wrench'], ['wanted', 'Wanted', 'megaphone'],
 ];
 const TOP_LEVEL = ['browse', 'saved', 'messages', 'mine', 'account'];
-const PUSHED_TITLES = { listing: 'Listing', inquire: 'Contact seller', post: 'New listing', business: 'Seller', billing: 'Billing', bizsettings: 'Business settings', admin: 'Admin', legal: 'Help', login: 'Sign in', notfound: 'Not found' };
+const PUSHED_TITLES = { listing: 'Listing', inquire: 'Contact seller', post: 'New listing', business: 'Seller', billing: 'Billing', bizsettings: 'Business settings', admin: 'Admin', legal: 'Help', guide: 'Buyer’s guide', login: 'Sign in', notfound: 'Not found' };
 function Header({ route, go }) {
   const { user, prefLoc, setPrefLoc, theme, setTheme, signOut, unread, isAdmin } = useApp();
   const [acct, setAcct] = useState(false);
@@ -628,7 +741,7 @@ function Account({ go }) {
       {!live && <ResetDemo />}
       <h2 className="sech">Help</h2>
       <div className="list">
-        <Row to="#/legal?doc=terms" title="Terms" /><Row to="#/legal?doc=privacy" title="Privacy" /><Row to="#/legal?doc=refunds" title="Refunds" /><Row to="#/legal?doc=support" title="Contact support" />
+        <Row to="#/guide" title="Buyer’s guide" sub="Prices, what to check, buying safely" /><Row to="#/legal?doc=terms" title="Terms" /><Row to="#/legal?doc=privacy" title="Privacy" /><Row to="#/legal?doc=refunds" title="Refunds" /><Row to="#/legal?doc=support" title="Contact support" />
       </div>
       {user && <div className="list"><button className="item" style={{ color: 'var(--red)' }} onClick={() => { signOut(); go('#/'); }}><span className="t"><b>Sign out</b></span></button></div>}
     </div>
@@ -889,6 +1002,8 @@ function Detail({ route, go }) {
           {l.type === 'routes' && <p className="muted" style={{ margin: 0 }}>Financial figures are reported by the seller and are not independently verified. VendGrid does not estimate returns.</p>}
           {l.type === 'locations' && <p className="muted" style={{ margin: 0 }}>The street address is private and is shared by the host after they respond.</p>}
           {more.length > 0 && <details className="disc"><summary>More specifications</summary><dl className="facts" style={{ margin: 0, border: 0, borderRadius: 0 }}>{more.map(row)}</dl></details>}
+          <PriceCheck l={l} listings={listings} />
+          <BuyerChecklist l={l} onAsk={own ? null : act} />
           {(l.type === 'locations' || l.type === 'routes' || l.type === 'services') && <AreaMap l={l} />}
           <div className="panel">
             <h3>Seller</h3>
@@ -1761,6 +1876,7 @@ export default function App() {
     case 'bizsettings': view = <BusinessSettings go={go} />; break;
     case 'admin': view = <Admin route={route} go={go} />; break;
     case 'account': view = <Account go={go} />; break;
+    case 'guide': view = <Guide route={route} go={go} />; break;
     default: view = <div className="empty"><h1>We couldn’t find that page</h1><p>Check the link, or head back to the listings.</p><a className="btn" href="#/">Keep browsing</a></div>;
   }
   if (mode === 'checking') view = <div className="grid" aria-busy="true" aria-label="Loading listings">{Array.from({ length: 8 }, (_, i) => <CardSkeleton key={i} />)}</div>;

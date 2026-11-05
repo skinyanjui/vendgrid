@@ -50,3 +50,19 @@ insert into public.vg_listings (id,type,org_id,owner,title,description,city,st,l
 on conflict (id) do nothing;
 select setval('public.vg_listings_id_seq', 10000, false);
 
+-- Extra listing detail (seller type, service history, route specifics)
+update public.vg_listings set fields = fields || '{"sellerType":"Refurbisher","service":"New coin mech spring 2026. Spirals checked and straightened.","returns":"Returns if not as described","shipCost":"Free within 25 mi of Evansville"}'::jsonb where id = 101;
+update public.vg_listings set fields = fields || '{"sellerType":"Refurbisher","service":"Shop refurbished: new door gaskets, evaporator cleaned, cooling recalibrated.","returns":"7-day returns","shipCost":"Freight quoted per destination"}'::jsonb where id = 102;
+update public.vg_listings set fields = fields || '{"sellerType":"Operator","service":"Serviced monthly on our route. Card reader active until sale.","returns":"No returns (as-is)","shipCost":"Pickup only"}'::jsonb where id = 103;
+update public.vg_listings set fields = fields || '{"sellerType":"Refurbisher","service":"Refurbished with cashless reader and telemetry mount installed.","returns":"30-day returns","shipCost":"Free within 40 mi of Indianapolis"}'::jsonb where id = 105;
+update public.vg_listings set fields = fields || '{"sellerType":"Operator","returns":"No returns (as-is)","shipCost":"Pickup only"}'::jsonb where id = 106;
+update public.vg_listings set fields = fields || '{"sellerType":"Operator","service":"Both units working on location until last month.","returns":"No returns (as-is)","shipCost":"Pickup only"}'::jsonb where id = 107;
+update public.vg_listings set fields = fields || '{"sellerType":"Manufacturer / authorized dealer","service":"Never placed. Factory packing and manual included.","returns":"30-day returns","shipCost":"Freight quoted per destination"}'::jsonb where id = 108;
+update public.vg_listings set fields = fields || '{"sellerType":"Refurbisher","service":"Compressor failed. Control board bench-tested good.","returns":"No returns (as-is)","shipCost":"Pickup only"}'::jsonb where id = 109;
+update public.vg_listings set fields = fields || '{"sellerType":"Operator","service":"Reliable on our route; no repairs in the last year.","returns":"No returns (as-is)","shipCost":"Free within 40 mi"}'::jsonb where id = 110;
+update public.vg_listings set fields = fields || '{"sellerType":"Refurbisher"}'::jsonb where id = 111;
+update public.vg_listings set fields = fields || '{"locationCount":11,"locationTypes":["Office","Industrial"],"equipment":["Snack machines","Beverage machines"],"cashFlow":"$25k–$50k","contracts":"Written agreements, transferable","reason":"Owner moving out of state"}'::jsonb where id = 301;
+update public.vg_listings set fields = fields || '{"locationCount":9,"locationTypes":["Office","Industrial"],"equipment":["Snack machines","Beverage machines"],"cashFlow":"Under $25k","contracts":"Written agreements","reason":"Owner retiring"}'::jsonb where id = 302;
+update public.vg_listings set fields = fields || '{"locationCount":6,"locationTypes":["Office","Healthcare"],"equipment":["Coffee","Micro market"],"cashFlow":"$50k–$100k","contracts":"Written agreements, transferable","reason":"Focusing on a larger territory"}'::jsonb where id = 303;
+update public.vg_listings set fields = fields || '{"locationCount":22,"locationTypes":["Industrial","Residential","Educational"],"equipment":["Combo machines","Beverage machines","AI cooler"],"cashFlow":"Not disclosed","contracts":"Mixed"}'::jsonb where id = 304;
+update public.vg_listings set fields = fields || '{"locationCount":4,"locationTypes":["Office","Hospitality"],"equipment":["Snack machines","Beverage machines"],"cashFlow":"Under $25k","contracts":"Verbal / handshake","reason":"Selling to fund a new business"}'::jsonb where id = 305;

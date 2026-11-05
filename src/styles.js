@@ -563,4 +563,27 @@ kbd{font:inherit;font-size:11px;padding:1px 6px;border:1px solid var(--border);b
 .osm .leaflet-control-attribution{background:rgba(255,255,255,.9)!important;color:#333}
 .osm .leaflet-control-attribution a{color:#0645ad}
 @media(pointer:coarse),(max-width:767px){.osm .leaflet-bar a{width:44px!important;height:44px!important;line-height:44px!important;font-size:22px!important}}
+.checklist.wide{grid-template-columns:minmax(0,1fr)}
+@media(min-width:600px){.checklist.wide{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.checklist.wide li{align-items:flex-start}
+.checklist.wide li>span{display:flex;flex-direction:column;min-width:0}
+.checklist.wide li b{font-weight:500;color:var(--foreground)}
+.checklist.wide li .icon{margin-top:2px;flex:none}
+.checkpanel h3{margin:0}
+.pricecheck{display:flex;flex-direction:column;gap:6px;padding:12px 16px;border:1px solid var(--border);border-radius:var(--radius-xl)}
+.pricecheck.warn{border-color:#FF9500;background:rgba(255,149,0,.08)}
+.pricecheck.warn .icon{color:#C93400}
+.pc-bar{position:relative;height:8px;margin:6px 0}
+.pc-range{position:absolute;inset:0;border-radius:999px;background:linear-gradient(90deg,var(--gray-200),var(--gray-400))}
+.pc-me{position:absolute;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;background:#007AFF;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.pc-legend{display:flex;justify-content:space-between;font-size:12px;line-height:16px;gap:8px}
+.guide .qa{display:flex;flex-direction:column;gap:10px;padding-top:20px;border-top:1px solid var(--border)}
+.guide .qa h2{font-size:17px;line-height:24px;margin:0}
+.guide .qa p{margin:0}
+.guide>div:first-child{display:flex;flex-direction:column;gap:12px;align-items:flex-start}
+.pricegrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+@media(min-width:600px){.pricegrid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.pg{display:flex;flex-direction:column;gap:2px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-lg);color:inherit;text-decoration:none}
+.pg:hover{border-color:var(--foreground)}
+.pg b{font-size:16px}.pg small{font-size:12px;color:var(--text-muted)}
 `;
