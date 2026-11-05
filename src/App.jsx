@@ -302,7 +302,7 @@ function PinCard({ group, anchor, sheet, pinned, onClose, onEnter, onLeave, show
 }
 
 function ResultsMap({ items, showType }) {
-  const { navOpen, setNavOpen } = useApp();
+  const { mapFull, setMapFull } = useApp();
   const groups = useMemo(() => {
     const m = {};
     items.forEach((l) => { const k = l.geo.city + ', ' + l.geo.st; (m[k] ??= { key: k, city: l.geo.city, lat: l.geo.lat, lng: l.geo.lng, items: [] }).items.push(l); });
@@ -314,7 +314,9 @@ function ResultsMap({ items, showType }) {
   const api = useRef(null), leave = useRef(null);
   const pts = useMemo(() => groups.map((g) => ({ key: g.key, lat: g.lat, lng: g.lng, count: g.items.length, label: g.city })), [groups]);
   useEffect(() => { if (pin && !groups.some((g) => g.key === pin)) setPin(null); }, [groups]);
-  useEffect(() => { const k = (e) => { if (e.key === 'Escape') { setPin(null); setHov(null); } }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k); }, []);
+  useEffect(() => () => setMapFull(false), []);
+  const openRef = useRef(null); openRef.current = pin || hov;
+  useEffect(() => { const k = (e) => { if (e.key !== 'Escape') return; if (openRef.current) { setPin(null); setHov(null); } else setMapFull(false); }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k); }, []);
   if (!groups.length) return null;
   const hover = (k, hard) => { clearTimeout(leave.current); if (k) setHov(k); else if (hard) setHov(null); else leave.current = setTimeout(() => setHov(null), 220); };
   const narrow = typeof window !== 'undefined' && window.innerWidth < 600;
@@ -333,7 +335,7 @@ function ResultsMap({ items, showType }) {
   return (
     <div className="rmap">
       <div className="rmap-frame">
-        <button type="button" className="mapfs" aria-pressed={!navOpen} onClick={() => setNavOpen(!navOpen)}><Icon n="panel" size={16} />{navOpen ? 'Full screen' : 'Exit full screen'}</button>
+        <button type="button" className="mapfs" aria-pressed={mapFull} onClick={() => setMapFull(!mapFull)}><Icon n="panel" size={16} />{mapFull ? 'Exit full screen' : 'Full screen'}</button>
         <ClusterMap label={`Map of ${items.length} listings across ${groups.length} cities`} height={narrow ? 'min(66vh, 520px)' : 'min(72vh, 680px)'} selected={pin} onPick={choose} onHover={hover} onView={setView} apiRef={api} points={pts}
           fallback={<svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Map of ${items.length} listings across ${groups.length} cities`}>
           <rect width={W} height={H} className="am-bg" />
@@ -761,7 +763,7 @@ const promoLive = (p) => p.status === 'active' || (p.status === 'canceled' && p.
 const TOP_LEVEL = ['browse', 'saved', 'messages', 'mine', 'account'];
 const PUSHED_TITLES = { info: 'VendGrid', sellers: 'Sellers', settings: 'Settings', activity: 'Activity', listing: 'Listing', inquire: 'Contact seller', post: 'New listing', business: 'Seller', billing: 'Billing', bizsettings: 'Business settings', admin: 'Admin', legal: 'Help', guide: 'Buyer’s guide', login: 'Sign in', notfound: 'Not found' };
 function Header({ route, go }) {
-  const { user, prefLoc, setPrefLoc, theme, setTheme, signOut, unread, isAdmin, noteCount, navOpen, setNavOpen } = useApp();
+  const { user, prefLoc, setPrefLoc, theme, setTheme, signOut, unread, isAdmin, noteCount } = useApp();
   const [acct, setAcct] = useState(false);
   const query = route.name === 'browse' ? route.query : null;
   const loc = query ? query.loc : prefLoc;
@@ -781,10 +783,7 @@ function Header({ route, go }) {
     <header className={'hdr' + (pushed ? ' pushed' : '')}>
       <button className="iconbtn backbtn" aria-label="Back" onClick={() => go('back')}><Icon n="back" /></button>
       <span className={'hdr-title' + (scrolled ? ' on' : '')} aria-hidden="true">{PUSHED_TITLES[route.name] || ''}</span>
-      <div className="brandrow">
-      <button type="button" className="iconbtn navbtn" aria-label={navOpen ? 'Hide side menu' : 'Show side menu'} aria-expanded={navOpen} aria-controls="sidenav" title={navOpen ? 'Hide side menu' : 'Show side menu'} onClick={() => setNavOpen(!navOpen)}><Icon n="panel" /></button>
-        <a className="brand" aria-label="VendGrid home" href={encodeQuery({ ...DEFAULT_QUERY, f: {}, loc: prefLoc })}><BrandMark /><span className="bname">VendGrid</span></a>
-      </div>
+      <a className="brand" aria-label="VendGrid home" href={encodeQuery({ ...DEFAULT_QUERY, f: {}, loc: prefLoc })}><BrandMark /><span className="bname">VendGrid</span></a>
       <SearchBox route={route} go={go} query={query} />
       <a className="iconbtn menubtn" href="#/post" aria-label="Post listing"><Icon n="plus" /></a>
       <div className="hdr-end">
@@ -813,7 +812,7 @@ function Sidebar({ route }) {
   const link = (c) => encodeQuery({ ...DEFAULT_QUERY, f: {}, cat: c || 'all', loc: route.name === 'browse' ? route.query.loc : prefLoc });
   const cur = (ok) => (ok ? 'page' : undefined);
   return (
-    <nav className="sidebar" id="sidenav" aria-label="Primary">
+    <nav className="sidebar" aria-label="Primary">
       {NAV.map(([c, label, ic]) => <a key={label} href={link(c)} aria-current={cur(cat === (c || 'all'))}><Icon n={ic} size={18} /><span className="slabel">{label}</span></a>)}
       <a href={user ? '#/saved' : '#/login?next=' + enc('#/saved')} aria-current={cur(route.name === 'saved')}><Icon n="heart" size={18} /><span className="slabel">Saved</span></a>
       <a href={user ? '#/messages' : '#/login?next=' + enc('#/messages')} aria-current={cur(route.name === 'messages')}><Icon n="send" size={18} /><span className="slabel">Messages</span>{unread > 0 && <span className="count" aria-label={`${unread} unread`}>{unread}</span>}</a>
@@ -1004,7 +1003,6 @@ function FilterDrawer({ query, setQuery, onClose }) {
   const cat = query.cat;
   const defs = cat === 'all' ? [] : TYPES[cat].filters.filter((f) => f.kind !== 'price');
   const showPrice = cat === 'all' || TYPES[cat].filters.some((f) => f.kind === 'price');
-  const showVerified = cat === 'all' || cat === 'services';
   const point = resolveLocation(query.loc);
   const setF = (k, v) => setQuery({ ...query, f: { ...query.f, [k]: v }, n: 1 });
   return createPortal(
@@ -1032,9 +1030,6 @@ function FilterDrawer({ query, setQuery, onClose }) {
               </div>
               {(query.pmin !== '' || query.pmax !== '') && <div className="switchrow"><label htmlFor="fd-np">Include listings without a price</label><Switch id="fd-np" label="Include listings without a price" checked={!!query.np} onChange={(on) => setQuery({ ...query, np: on ? '1' : '', n: 1 })} /></div>}
             </div>
-          )}
-          {showVerified && (
-            <div className="switchrow"><label htmlFor="fd-ver">Verified businesses only</label><Switch id="fd-ver" label="Verified businesses only" checked={!!query.verified} onChange={(on) => setQuery({ ...query, verified: on ? '1' : '', n: 1 })} /></div>
           )}
         </div>
         <footer>
@@ -2086,7 +2081,7 @@ export default function App() {
   const [hash, setHash] = useState(bootAddr);
   const [listings, setListings] = usePersist('listings', SEED);
   const [user, setUser] = usePersist('user', null);
-  const [navOpen, setNavOpen] = usePersist('navopen', true); // desktop: hide the side menu to give the page (the map above all) the full width
+  const [mapFull, setMapFull] = useState(false); // desktop map only: hides the side menu for a full-width map; never remembered, and ends when you leave the map
   const [favs, setFavs] = usePersist('favs', () => new Set(), (x) => [...x], (a) => new Set(a));
   const [searches, setSearches] = usePersist('searches', []);
   const [convs, setConvs] = usePersist('convs', []);
@@ -2444,7 +2439,7 @@ export default function App() {
     const h = (e) => { const el = e.target.closest && e.target.closest('a[href^="#/"]'); if (!el || e.defaultPrevented || e.metaKey || e.ctrlKey || e.button) return; e.preventDefault(); go(el.getAttribute('href')); };
     document.addEventListener('click', h); return () => document.removeEventListener('click', h);
   }, [go]);
-  const ctx = { navOpen, setNavOpen, authFail, themeSel, seeSearch, listings: allListings, priv, metrics, impr, tickets: live ? liveTickets : tickets, track, trackImpr, addTicket, isPro, isAdmin, plan, stats: liveStats, promos: promosView, changeEmail, signOutAll, exportData, deleteData, notes, noteCount, markNotesRead, verif: verifView, verifQueue, openVerifDoc, myOrg, saveOrg, room, closeTicket, reports: live ? liveReports : reports, events, invoices, audit, views, subscribe, cancelPlan, promote, cancelPromo, confirmPayment, processEvent, submitVerif, decideVerif, decideReport, bumpView, orgs, user: curUser, favs: curFavs, searches: curSearches, convs: curConvs, live, mode, sendMagicLink, drafts, prefLoc, setPrefLoc, theme, setTheme, unread, notify, requireAuth, signIn, signOut, toggleFav, saveSearch, removeSearch, searchFromText, startInquiry, sendMsg, markRead, setConvStatus, blockConv, report, setStatus, publish, setDraft };
+  const ctx = { mapFull, setMapFull, authFail, themeSel, seeSearch, listings: allListings, priv, metrics, impr, tickets: live ? liveTickets : tickets, track, trackImpr, addTicket, isPro, isAdmin, plan, stats: liveStats, promos: promosView, changeEmail, signOutAll, exportData, deleteData, notes, noteCount, markNotesRead, verif: verifView, verifQueue, openVerifDoc, myOrg, saveOrg, room, closeTicket, reports: live ? liveReports : reports, events, invoices, audit, views, subscribe, cancelPlan, promote, cancelPromo, confirmPayment, processEvent, submitVerif, decideVerif, decideReport, bumpView, orgs, user: curUser, favs: curFavs, searches: curSearches, convs: curConvs, live, mode, sendMagicLink, drafts, prefLoc, setPrefLoc, theme, setTheme, unread, notify, requireAuth, signIn, signOut, toggleFav, saveSearch, removeSearch, searchFromText, startInquiry, sendMsg, markRead, setConvStatus, blockConv, report, setStatus, publish, setDraft };
 
   let view;
   switch (route.name) {
@@ -2476,7 +2471,7 @@ export default function App() {
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap" />
       <button className="skip" onClick={() => { const m = document.getElementById('main'); if (m) m.focus(); }}>Skip to content</button>
       <Header route={route} go={go} />
-      <div className={'layout' + (navOpen ? '' : ' navoff')}>
+      <div className={'layout' + (mapFull ? ' navoff' : '')}>
         <Sidebar route={route} />
         <main className="main" id="main" tabIndex={-1}>{view}<Footer /></main>
       </div>

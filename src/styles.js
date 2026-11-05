@@ -739,11 +739,7 @@ a.u{text-decoration:underline;text-underline-offset:2px}
 .pincard.sheet .pinstrip .card{flex-basis:min(220px,64vw)}
 .mapcount{display:none}
 
-.navbtn{display:none}
-.brandrow{display:contents}
 @media(min-width:768px){
-  .brandrow{display:flex;grid-area:brand;align-items:center;gap:12px;justify-self:start}
-  .navbtn{display:inline-flex}
   .layout.navoff{grid-template-columns:minmax(0,1fr)}
   .layout.navoff .sidebar{display:none}
   .layout.navoff .main{max-width:none;padding-left:16px;padding-right:16px}
@@ -756,5 +752,8 @@ a.u{text-decoration:underline;text-underline-offset:2px}
   .mapfs{display:inline-flex;align-items:center;gap:8px;position:absolute;top:10px;right:10px;z-index:900;height:36px;padding:0 12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--background);color:var(--foreground);font:inherit;font-weight:500;cursor:pointer;box-shadow:var(--shadow-sm,0 1px 2px rgba(0,0,0,.12))}
   .mapfs:hover{background:var(--gray-100)}
 }
+
+/* The side menu already lists the categories, so the chip row only shows where the side menu doesn't: phones, and the full-screen map. */
+@media(min-width:768px){.layout:not(.navoff) .toprow .chips{display:none}.layout:not(.navoff) .toprow .bar{margin-left:0;width:100%;justify-content:flex-start}.layout:not(.navoff) .toprow .bar .grow{flex:1}}
 
 `;
