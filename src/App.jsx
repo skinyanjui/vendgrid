@@ -4,7 +4,7 @@ import { POLICIES, LEGAL } from './legal.js';
 import { INFO, INFO_KEYS, INFO_LABELS, INFO_CTA } from './info.js';
 import { pathToRoute, listingPath } from './seo.js';
 import { TYPES, TYPE_KEYS, CITIES, dist, ORGS, SEED, PRIVATE_SEED, DEMO_ROOMS, TRANSITIONS, STATUS_LABEL, FMT, resolveLocation, suggestLocations, hrefFor, slugify, optionsFor } from './data.js';
-import { PAGE, SORTS, DEFAULT_QUERY, sortOptions, effectiveSort, parseIntent, runSearch, suggest, priceText } from './engine.js';
+import { PAGE, SORTS, DEFAULT_QUERY, sortOptions, effectiveSort, parseIntent, runSearch, searchFull, suggest, priceText } from './engine.js';
 import { CSS } from './styles.js';
 import * as api from './backend.js';
 import L from 'leaflet';
@@ -1022,7 +1022,44 @@ function useTrap(ref, onClose) {
   }, []);
 }
 
-function FilterDrawer({ query, setQuery, onClose }) {
+/* Price bands that follow the data: three roughly equal groups, rounded to numbers people would say out loud. */
+const niceNum = (v) => { if (v <= 0) return 0; const p = 10 ** Math.floor(Math.log10(v)); const m = v / p; return Math.round([1, 2, 2.5, 5, 10].reduce((x, y) => (Math.abs(y - m) < Math.abs(x - m) ? y : x)) * p); };
+const priceBands = (prices) => {
+  if (prices.length < 6) return [];
+  const q = (f) => prices[Math.min(prices.length - 1, Math.floor(prices.length * f))];
+  const a = niceNum(q(1 / 3)), b = niceNum(q(2 / 3));
+  if (!(a > 0 && b > a)) return [];
+  return [{ label: `Under ${FMT(a)}`, pmin: '', pmax: String(a) }, { label: `${FMT(a)}–${FMT(b)}`, pmin: String(a), pmax: String(b) }, { label: `${FMT(b)}+`, pmin: String(b), pmax: '' }];
+};
+const countBand = (prices, band) => { let n = 0; for (const p of prices) if ((band.pmin === '' || p >= +band.pmin) && (band.pmax === '' || p <= +band.pmax)) n++; return n; };
+
+/* A choice with the number of listings it leads to. Options that lead nowhere are not offered. */
+function FChip({ on, count, onClick, icon, children }) {
+  const dead = count === 0 && !on; // would lead to no results with the other filters as they are
+  return <button type="button" className={'fchip' + (on ? ' on' : '') + (dead ? ' zero' : '')} aria-pressed={on} disabled={dead} title={dead ? 'No listings match with your other filters' : undefined} onClick={onClick}>{icon}<span>{children}</span>{count != null && <span className="n"><span className="sr">, </span>{count}</span>}</button>;
+}
+function FacetGroup({ def, entries, value, onChange, open }) {
+  const [all, setAll] = useState(false);
+  const multi = def.kind === 'multi';
+  const sel = multi ? value || [] : value ? [value] : [];
+  const list = entries.slice();
+  sel.forEach((o) => { if (!list.some((x) => x[0] === o)) list.push([o, 0]); });
+  if (!list.length) return null;
+  const LIMIT = 6;
+  const shown = all ? list : list.filter((x, i) => i < LIMIT || sel.includes(x[0]));
+  const toggle = (o) => onChange(multi ? (sel.includes(o) ? sel.filter((x) => x !== o) : [...sel, o]) : sel[0] === o ? '' : o);
+  return (
+    <details className="fsec" open={open || sel.length > 0}>
+      <summary><span>{def.label}</span>{sel.length > 0 && <span className="fsel">{sel.join(', ')}</span>}</summary>
+      <div className="fchips">
+        {shown.map(([o, c]) => <FChip key={o} on={sel.includes(o)} count={c} onClick={() => toggle(o)}>{o}</FChip>)}
+        {list.length > shown.length && <button type="button" className="linkbtn" onClick={() => setAll(true)}>Show all {list.length}</button>}
+      </div>
+    </details>
+  );
+}
+
+function FilterDrawer({ query, setQuery, onClose, res, onCat }) {
   const { setPrefLoc } = useApp();
   const ref = useRef(null);
   useTrap(ref, onClose);
@@ -1031,36 +1068,61 @@ function FilterDrawer({ query, setQuery, onClose }) {
   const showPrice = cat === 'all' || TYPES[cat].filters.some((f) => f.kind === 'price');
   const point = resolveLocation(query.loc);
   const setF = (k, v) => setQuery({ ...query, f: { ...query.f, [k]: v }, n: 1 });
+  const bands = useMemo(() => (showPrice ? priceBands(res.bandPrices) : []), [res.bandPrices, showPrice]);
+  const customPrice = (query.pmin !== '' || query.pmax !== '') && !bands.some((b) => b.pmin === query.pmin && b.pmax === query.pmax);
+  const entriesOf = (d) => res.facets[d.key] || [];
+  const visible = defs.filter((d) => entriesOf(d).length || (query.f[d.key] && query.f[d.key].length));
+  const top = visible.slice(0, 3), more = visible.slice(3);
+  const types = Object.entries(res.catCounts).sort((a, b) => b[1] - a[1]);
+  const any = query.verified || query.pmin !== '' || query.pmax !== '' || query.r || Object.values(query.f).some((v) => v && v.length);
   return createPortal(
     <>
       <div className="scrim" onClick={onClose} />
       <div className="drawer" role="dialog" aria-modal="true" aria-label="Filters" ref={ref}>
         <header><h2>Filters</h2><button className="iconbtn" aria-label="Close filters" onClick={onClose}><Icon n="x" /></button></header>
-        <div className="body">
-          <Field id="fd-loc" label="Location"><LocationInput id="fd-loc" value={query.loc} onPick={(v) => { setPrefLoc(v); setQuery({ ...query, loc: v, r: v ? query.r : '', n: 1 }); }} /></Field>
-          {point && point.kind === 'city' && (
-            <div className="field"><span className="label" id="fd-r-l">Distance</span><Seg id="fd-r" label="Distance" size="wrap" options={[['25', '25 mi'], ['50', '50 mi'], ['', '100 mi'], ['250', '250 mi'], ['any', 'Any']]} value={query.r || ''} onChange={(v) => setQuery({ ...query, r: v, n: 1 })} /></div>
-          )}
-          {defs.map((d) => {
-            const opts = d.options || optionsFor(cat, d.key);
-            if (d.kind === 'multi') return <div className="field" key={d.key}><span className="label">{d.label}</span><FieldInput def={{ key: d.key, label: '', kind: 'multi', options: opts }} idp="flt" value={query.f[d.key] || []} onChange={(v) => setF(d.key, v)} /></div>;
-            if (opts.length <= 6 && opts.every((o) => String(o).length <= 28)) return <div className="field" key={d.key}><span className="label">{d.label}</span><Seg id={'fd-' + d.key} label={d.label} size="wrap" options={[['', 'Any'], ...opts.map((o) => [o, o])]} value={query.f[d.key] || ''} onChange={(v) => setF(d.key, v)} /></div>;
-            return <Field key={d.key} id={'fd-' + d.key} label={d.label}><select id={'fd-' + d.key} className="select" value={query.f[d.key] || ''} onChange={(e) => setF(d.key, e.target.value)}><option value="">Any</option>{opts.map((o) => <option key={o}>{o}</option>)}</select></Field>;
-          })}
-          {showPrice && (
-            <div className="field"><span className="label">{TYPES[cat]?.priceLabel || (cat === 'routes' ? 'Asking price' : 'Price')}</span>
-              <div className="row2">
-                <input className="input" style={{ width: 130 }} inputMode="numeric" placeholder="Min $" aria-label="Minimum price" value={query.pmin} onChange={(e) => setQuery({ ...query, pmin: e.target.value.replace(/\D/g, ''), n: 1 })} />
-                <span aria-hidden="true">–</span>
-                <input className="input" style={{ width: 130 }} inputMode="numeric" placeholder="Max $" aria-label="Maximum price" value={query.pmax} onChange={(e) => setQuery({ ...query, pmax: e.target.value.replace(/\D/g, ''), n: 1 })} />
-              </div>
-              {(query.pmin !== '' || query.pmax !== '') && <div className="switchrow"><label htmlFor="fd-np">Include listings without a price</label><Switch id="fd-np" label="Include listings without a price" checked={!!query.np} onChange={(on) => setQuery({ ...query, np: on ? '1' : '', n: 1 })} /></div>}
+        <div className="body fbody">
+          <section className="fsec fquick" aria-label="Quick picks">
+            <span className="label">Quick picks</span>
+            <div className="fchips">
+              <FChip on={!!query.verified} count={query.verified ? res.total : res.verifiedCount} icon={<Icon n="check" size={14} />} onClick={() => setQuery({ ...query, verified: query.verified ? '' : '1', n: 1 })}>Verified sellers</FChip>
+              {bands.map((b) => <FChip key={b.label} on={query.pmin === b.pmin && query.pmax === b.pmax} count={countBand(res.prices, b)} onClick={() => setQuery({ ...query, pmin: b.pmin, pmax: b.pmax, np: '', n: 1 })}>{b.label}</FChip>)}
             </div>
+          </section>
+          {cat === 'all' && types.length > 1 && (
+            <section className="fsec" aria-label="Type">
+              <span className="label">What are you looking for?</span>
+              <div className="fchips">{types.map(([t, c]) => <FChip key={t} count={c} onClick={() => onCat(t)}>{TYPES[t].label}</FChip>)}</div>
+            </section>
+          )}
+          <section className="fsec" aria-label="Location">
+            <Field id="fd-loc" label="Location"><LocationInput id="fd-loc" value={query.loc} onPick={(v) => { setPrefLoc(v); setQuery({ ...query, loc: v, r: v ? query.r : '', n: 1 }); }} /></Field>
+            {point && point.kind === 'city' && (
+              <div className="field"><span className="label" id="fd-r-l">Distance</span><Seg id="fd-r" label="Distance" size="wrap" options={[['25', '25 mi'], ['50', '50 mi'], ['', '100 mi'], ['250', '250 mi'], ['any', 'Any']]} value={query.r || ''} onChange={(v) => setQuery({ ...query, r: v, n: 1 })} /></div>
+            )}
+          </section>
+          {top.map((d, i) => <FacetGroup key={d.key} def={d} entries={entriesOf(d)} value={query.f[d.key]} onChange={(v) => setF(d.key, v)} open={i < 2} />)}
+          {(more.length > 0 || showPrice) && (
+            <details className="fsec fmore" open={customPrice || more.some((d) => query.f[d.key] && query.f[d.key].length)}>
+              <summary><span>More filters</span></summary>
+              <div className="fmorebody">
+                {more.map((d) => <FacetGroup key={d.key} def={d} entries={entriesOf(d)} value={query.f[d.key]} onChange={(v) => setF(d.key, v)} open />)}
+                {showPrice && (
+                  <div className="field"><span className="label">Custom price range</span>
+                    <div className="row2">
+                      <input className="input" style={{ width: 130 }} inputMode="numeric" placeholder="Min $" aria-label="Minimum price" value={query.pmin} onChange={(e) => setQuery({ ...query, pmin: e.target.value.replace(/\D/g, ''), n: 1 })} />
+                      <span aria-hidden="true">–</span>
+                      <input className="input" style={{ width: 130 }} inputMode="numeric" placeholder="Max $" aria-label="Maximum price" value={query.pmax} onChange={(e) => setQuery({ ...query, pmax: e.target.value.replace(/\D/g, ''), n: 1 })} />
+                    </div>
+                    {(query.pmin !== '' || query.pmax !== '') && <div className="switchrow"><label htmlFor="fd-np">Include listings without a price</label><Switch id="fd-np" label="Include listings without a price" checked={!!query.np} onChange={(on) => setQuery({ ...query, np: on ? '1' : '', n: 1 })} /></div>}
+                  </div>
+                )}
+              </div>
+            </details>
           )}
         </div>
         <footer>
-          <button className="btn secondary" onClick={() => setQuery({ ...query, f: {}, pmin: '', pmax: '', verified: '', r: '', n: 1 })}>Clear all</button>
-          <button className="btn" onClick={onClose}>Show results</button>
+          <button className="btn secondary" disabled={!any} onClick={() => setQuery({ ...query, f: {}, pmin: '', pmax: '', np: '', verified: '', r: '', n: 1 })}>Clear all</button>
+          <button className="btn" onClick={onClose} aria-live="polite">{res.total > 0 ? `Show ${res.total} ${res.total === 1 ? 'result' : 'results'}` : 'No matches. Loosen a filter'}</button>
         </footer>
       </div>
     </>,
@@ -1071,28 +1133,15 @@ function FilterDrawer({ query, setQuery, onClose }) {
 function Browse({ route, go }) {
   const { listings, orgs, user, searches, saveSearch, requireAuth, notify, prefLoc, track, trackImpr } = useApp();
   const query = route.query;
-  const [state, setState] = useState({ status: 'loading', items: [], total: 0, hasMore: false });
   const [drawer, setDrawer] = useState(false);
-  const lastKey = useRef('');
   const key = JSON.stringify({ ...query, n: 0 });
   const set = (q, replace = true) => go(encodeQuery(q), replace);
   const sort = effectiveSort(query);
 
-  const load = useCallback(() => {
-    const ac = new AbortController();
-    const same = lastKey.current === key;
-    setState((s) => ({ ...s, status: same && s.items.length ? 'more' : 'loading' }));
-    lastKey.current = key;
-    const t = setTimeout(() => {
-      if (ac.signal.aborted) return;
-      try {
-        if (typeof navigator !== 'undefined' && navigator.onLine === false) throw new Error('offline');
-        setState({ status: 'ok', ...runSearch(listings, orgs, query) });
-      } catch (e) { setState((s) => ({ ...s, status: 'error' })); }
-    }, same ? 120 : 320);
-    return () => { ac.abort(); clearTimeout(t); };
-  }, [key, query.n, listings, orgs]);
-  useEffect(() => load(), [load]);
+  // The search is an in-memory index, so results (and the live counts the filter panel shows) are ready in the same
+  // render as the change: no spinner, no debounce. Paging and the map reuse the same cached computation.
+  const res = useMemo(() => searchFull(listings, orgs, query), [listings, orgs, key]);
+  const state = useMemo(() => ({ status: 'ok', items: res.items.slice(0, query.n * PAGE), total: res.total, hasMore: res.items.length > query.n * PAGE }), [res, query.n]);
 
   // restore scroll after returning from a listing
   const scrollKey = 'sc:' + (typeof location !== 'undefined' ? location.hash : '');
@@ -1122,14 +1171,22 @@ function Browse({ route, go }) {
     set(next, false);
     if (removed.length) notify(`Removed filters that don't apply to ${cat === 'all' ? 'All' : TYPES[cat].label}: ${removed.join(', ')}`);
   };
-  const tokens = [];
-  if (query.loc) tokens.push([query.loc, () => set({ ...query, loc: '', r: '', n: 1 })]);
-  if (query.loc && query.r) tokens.push([query.r === 'any' ? 'Any distance' : `Within ${query.r} mi`, () => set({ ...query, r: '', n: 1 })]);
-  if (query.pmin !== '' || query.pmax !== '') tokens.push([query.pmin !== '' && query.pmax !== '' ? `${FMT(query.pmin)}–${FMT(query.pmax)}` : query.pmax !== '' ? `Under ${FMT(query.pmax)}` : `${FMT(query.pmin)}+`, () => set({ ...query, pmin: '', pmax: '', n: 1 })]);
-  Object.entries(query.f).forEach(([k, v]) => { (Array.isArray(v) ? v : [v]).filter(Boolean).forEach((x) => tokens.push([x, () => set({ ...query, n: 1, f: { ...query.f, [k]: Array.isArray(v) ? v.filter((y) => y !== x) : '' } })])); });
+  const tokens = []; // [label, remove, query-without-it]
+  const tk = (label, qx) => tokens.push([label, () => set(qx), qx]);
+  if (query.loc) tk(query.loc, { ...query, loc: '', r: '', n: 1 });
+  if (query.loc && query.r) tk(query.r === 'any' ? 'Any distance' : `Within ${query.r} mi`, { ...query, r: '', n: 1 });
+  if (query.pmin !== '' || query.pmax !== '') tk(query.pmin !== '' && query.pmax !== '' ? `${FMT(query.pmin)}–${FMT(query.pmax)}` : query.pmax !== '' ? `Under ${FMT(query.pmax)}` : `${FMT(query.pmin)}+`, { ...query, pmin: '', pmax: '', n: 1 });
+  Object.entries(query.f).forEach(([k, v]) => { (Array.isArray(v) ? v : [v]).filter(Boolean).forEach((x) => tk(x, { ...query, n: 1, f: { ...query.f, [k]: Array.isArray(v) ? v.filter((y) => y !== x) : '' } })); });
   const nFilters = tokens.length;
+  // When nothing matches, the fastest way out: which single filter, if dropped, brings results back, and how many.
+  const relax = useMemo(() => {
+    if (res.total > 0) return [];
+    const opts = tokens.map(([label, , qx]) => [label, qx]);
+    if (query.verified) opts.push(['Verified only', { ...query, verified: '', n: 1 }]);
+    return opts.map(([label, qx]) => ({ label, qx, n: searchFull(listings, orgs, qx).total })).filter((x) => x.n > 0).sort((a, b) => b.n - a.n).slice(0, 3);
+  }, [res, listings, orgs]);
   const sorts = sortOptions(query);
-  const mapItems = useMemo(() => runSearch(listings, orgs, { ...query, n: 99 }).items, [listings, orgs, JSON.stringify(query)]);
+  const mapItems = res.items;
   const clearAll = () => set({ ...DEFAULT_QUERY, f: {}, cat: query.cat, q: query.q, loc: query.loc });
   const label = query.cat === 'all' ? 'All listings' : TYPES[query.cat].label;
   const savedAlready = searches.some((s) => s.href === encodeQuery({ ...query, n: 1 }));
@@ -1182,6 +1239,7 @@ function Browse({ route, go }) {
           <div className="row2" style={{ flexWrap: 'wrap', justifyContent: 'center' }}>
             {query.loc && query.r !== 'any' && <button className="btn secondary" onClick={() => set({ ...query, r: 'any', n: 1 })}><Icon n="pin" size={16} />Search any distance</button>}
             {(query.pmin !== '' || query.pmax !== '') && !query.np && <button className="btn secondary" onClick={() => set({ ...query, np: '1', n: 1 })}>Include unpriced listings</button>}
+            {relax.map((r) => <button key={r.label} className="btn secondary" onClick={() => set(r.qx)}>Remove “{r.label}”: {r.n} {r.n === 1 ? 'result' : 'results'}</button>)}
             {(tokens.length > 0 || query.q) && <button className="btn secondary" onClick={clearAll}><Icon n="x" size={16} />Clear filters</button>}<a className="btn" href={'#/post' + (query.cat !== 'all' ? '?type=' + query.cat : '')}>Post a listing</a></div>
         </div>
       ) : (
@@ -1190,7 +1248,7 @@ function Browse({ route, go }) {
           {query.view !== 'map' && state.hasMore && <div style={{ display: 'flex', justifyContent: 'center', marginTop: 24 }}><button className="btn secondary" disabled={state.status === 'more'} onClick={() => set({ ...query, n: query.n + 1 })}>{state.status === 'more' ? 'Loading…' : 'Load more'}</button></div>}
         </>
       )}
-      {drawer && <FilterDrawer query={query} setQuery={(q) => set(q)} onClose={() => setDrawer(false)} />}
+      {drawer && <FilterDrawer query={query} setQuery={(q) => set(q)} onClose={() => setDrawer(false)} res={res} onCat={setCat} />}
     </>
   );
 }

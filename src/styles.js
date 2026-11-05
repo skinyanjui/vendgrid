@@ -788,4 +788,24 @@ a.u{text-decoration:underline;text-underline-offset:2px}
 }
 @media(max-width:380px){.codeinput{font-size:24px;letter-spacing:.3em}.authtabs a{font-size:14px}}
 
+/* ── filter panel ── */
+.fbody{display:flex;flex-direction:column;gap:0;padding-top:4px}
+.fsec{display:flex;flex-direction:column;gap:10px;padding:14px 0;border-bottom:1px solid var(--border)}
+.fsec>summary{display:flex;align-items:center;gap:8px;min-height:44px;cursor:pointer;font-weight:600;list-style:none}
+.fsec>summary::-webkit-details-marker{display:none}
+.fsec>summary::after{content:"";margin-left:auto;width:8px;height:8px;border-right:2px solid var(--text-muted);border-bottom:2px solid var(--text-muted);transform:rotate(45deg);transition:transform .15s}
+.fsec[open]>summary::after{transform:rotate(-135deg)}
+.fsec .fsel{color:var(--blue);font-weight:500;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55%}
+.fchips{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.fchip{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 14px;border:1px solid var(--border);border-radius:9999px;background:var(--background);color:var(--foreground);font:inherit;font-size:14px;cursor:pointer}
+.fchip:hover{background:var(--gray-100)}
+.fchip .n{color:var(--text-muted);font-size:12px;font-variant-numeric:tabular-nums}
+.fchip.on{border-color:var(--blue);background:color-mix(in srgb,var(--blue) 12%,var(--background));color:var(--blue)}
+.fchip.on .n{color:inherit}
+.fmorebody{display:flex;flex-direction:column;gap:4px}
+.fmorebody .fsec:last-child{border-bottom:0}
+@media(pointer:coarse){.fchip{min-height:44px}}
+.fchip.zero{opacity:.45;cursor:not-allowed}
+.fchips .linkbtn{min-height:44px;padding:0 10px;display:inline-flex;align-items:center}
+
 `;
