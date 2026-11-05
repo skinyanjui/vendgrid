@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom';
 import React, { useState, useEffect, useRef, useMemo, useCallback, createContext, useContext } from 'react';
 import { POLICIES, LEGAL } from './legal.js';
+import { INFO, INFO_KEYS, INFO_LABELS, INFO_CTA } from './info.js';
 import { pathToRoute, listingPath } from './seo.js';
 import { TYPES, TYPE_KEYS, CITIES, dist, ORGS, SEED, PRIVATE_SEED, DEMO_ROOMS, TRANSITIONS, STATUS_LABEL, FMT, resolveLocation, suggestLocations, hrefFor, slugify, optionsFor } from './data.js';
 import { PAGE, SORTS, DEFAULT_QUERY, sortOptions, effectiveSort, parseIntent, runSearch, suggest, priceText } from './engine.js';
@@ -65,6 +66,9 @@ export function parseHash(h) {
     case 'guide': return { name: 'guide', topic: sp.get('t') || 'machines' };
     case 'activity': return { name: 'activity' };
     case 'settings': return { name: 'settings' };
+    case 'about': case 'seller-guide': case 'pricing': case 'safety': return { name: 'info', doc: seg[0] };
+    case 'support': return { name: 'legal', doc: 'support' };
+    case 'sellers': return { name: 'sellers' };
     default: return { name: 'notfound' };
   }
 }
@@ -82,7 +86,9 @@ export function toAddr(h) {
     case 'browse': { const s = h.split('?')[1] || ''; return s ? '#s-' + toHex(s) : '#'; }
     case 'mine': return '#my-listings';
     case 'bizsettings': return '#business-settings';
-    case 'notfound': return '#';
+    case 'notfound': return '#404';
+    case 'info': return '#' + r.doc;
+    case 'legal': return r.doc === 'support' ? '#support' : '#legal';
     default: return '#' + r.name;
   }
 }
@@ -97,6 +103,8 @@ export function fromAddr(a) {
   if ((m = s.match(/^business-([a-z0-9-]+)$/))) return '#/business/' + m[1];
   if ((m = s.match(/^s-([0-9a-f]+)$/))) return '#/?' + fromHex(m[1]);
   if (s === 'menu') return '#/account';
+  if (s === '404') return '#/404';
+  if (INFO_KEYS.includes(s) || s === 'support' || s === 'sellers') return '#/' + s;
   if (s === 'my-listings') return '#/my-listings';
   if (['post', 'saved', 'messages', 'login', 'account', 'billing', 'admin', 'legal', 'guide', 'activity', 'settings'].includes(s)) return '#/' + s;
   return '#/';
@@ -660,7 +668,7 @@ const NAV = [
   ['', 'Explore', 'search'], ['machines', 'Machines', 'machine'], ['parts', 'Parts', 'cog'], ['locations', 'Locations', 'building'], ['routes', 'Routes', 'route'], ['services', 'Services', 'wrench'], ['wanted', 'Wanted', 'megaphone'],
 ];
 const TOP_LEVEL = ['browse', 'saved', 'messages', 'mine', 'account'];
-const PUSHED_TITLES = { settings: 'Settings', activity: 'Activity', listing: 'Listing', inquire: 'Contact seller', post: 'New listing', business: 'Seller', billing: 'Billing', bizsettings: 'Business settings', admin: 'Admin', legal: 'Help', guide: 'Buyer’s guide', login: 'Sign in', notfound: 'Not found' };
+const PUSHED_TITLES = { info: 'VendGrid', sellers: 'Sellers', settings: 'Settings', activity: 'Activity', listing: 'Listing', inquire: 'Contact seller', post: 'New listing', business: 'Seller', billing: 'Billing', bizsettings: 'Business settings', admin: 'Admin', legal: 'Help', guide: 'Buyer’s guide', login: 'Sign in', notfound: 'Not found' };
 function Header({ route, go }) {
   const { user, prefLoc, setPrefLoc, theme, setTheme, signOut, unread, isAdmin, noteCount } = useApp();
   const [acct, setAcct] = useState(false);
@@ -1649,10 +1657,80 @@ function Legal({ route }) {
   );
 }
 function Footer() {
+  const { live } = useApp();
+  const groups = [
+    ['VendGrid', [['About', '#/about'], ['Sellers', '#/sellers'], ['Pricing', '#/pricing']]],
+    ['Help', [['Buyer’s guide', '#/guide'], ['Seller guide', '#/seller-guide'], ['Safety', '#/safety'], ['Contact support', '#/support']]],
+    ['Legal', [['Terms', '#/legal?doc=terms'], ['Privacy', '#/legal?doc=privacy'], ['Refunds', '#/legal?doc=refunds']]],
+  ];
   return (
-    <footer className="foot"><nav aria-label="Help and policies">
-      <a href="#/legal?doc=terms">Terms</a><a href="#/legal?doc=privacy">Privacy</a><a href="#/legal?doc=refunds">Refunds</a><a href="#/legal?doc=support">Contact support</a>
-    </nav><span className="muted">{useApp().live ? 'Sample listings from demo businesses are mixed in while VendGrid launches.' : 'Demo inventory. Listings are sample data, not live offers.'}</span></footer>
+    <footer className="foot">
+      <div className="footcols">{groups.map(([h, links]) => <nav key={h} aria-label={h}><b>{h}</b>{links.map(([l, to]) => <a key={l} href={to}>{l}</a>)}</nav>)}</div>
+      <span className="muted">{live ? 'Sample listings from demo businesses are mixed in while VendGrid launches.' : 'Demo inventory. Listings are sample data, not live offers.'}</span>
+    </footer>
+  );
+}
+
+/* Public information pages (About, Seller guide, Pricing, Safety): the same content the server renders for search engines */
+function InfoPage({ route }) {
+  const P = INFO[route.doc] || INFO.about;
+  const cta = INFO_CTA[route.doc] || [];
+  return (
+    <div className="page">
+      <article className="policy">
+        <header><h1>{P.title}</h1></header>
+        <p className="lead">{P.intro}</p>
+        {P.sections.length > 4 && <nav aria-label="On this page" className="toc"><ol>{P.sections.map(([h], i) => <li key={h}><a href={'#pol-' + i} onClick={(e) => { e.preventDefault(); const el = document.getElementById('pol-' + i); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>{h}</a></li>)}</ol></nav>}
+        {P.sections.map(([h, ps], i) => <section key={h} id={'pol-' + i}><h2>{h}</h2>{ps.map((x) => { const m = x.match(/^([A-Z][^:.]{2,40}): (.*)$/); return <p key={x}>{m ? <><b>{m[1]}:</b> {m[2]}</> : x}</p>; })}</section>)}
+      </article>
+      {cta.length > 0 && <div className="row2" style={{ flexWrap: 'wrap' }}>{cta.map(([l, to], i) => <a key={l} className={'btn' + (i ? ' secondary' : '')} href={to}>{l}</a>)}</div>}
+      <nav className="infonav" aria-label="More about VendGrid">{INFO_KEYS.filter((k) => k !== route.doc).map((k) => <a key={k} className="chip" href={'#/' + k}>{INFO_LABELS[k]}</a>)}</nav>
+    </div>
+  );
+}
+
+/* Seller directory: every business with something live, verified ones first */
+function Sellers() {
+  const { orgs, listings } = useApp();
+  const [q, setQ] = useState('');
+  const rows = useMemo(() => {
+    const n = {};
+    listings.forEach((l) => { if (l.status === 'published' && l.org && l.org !== 'unknown') n[l.org] = (n[l.org] || 0) + 1; });
+    const all = Object.values(orgs).filter((o) => o && o.id !== 'unknown' && n[o.id]).map((o) => ({ ...o, n: n[o.id] }));
+    all.sort((a, b) => (b.verified - a.verified) || (b.n - a.n) || a.name.localeCompare(b.name));
+    return all;
+  }, [orgs, listings]);
+  const shown = rows.filter((o) => !q.trim() || (o.name + ' ' + (o.city || '')).toLowerCase().includes(q.trim().toLowerCase()));
+  return (
+    <div className="page wide">
+      <div><h1>Sellers</h1><p className="muted" style={{ margin: '4px 0 0' }}>Businesses with listings on VendGrid. Verified businesses passed our review; it isn’t a guarantee about any listing.</p></div>
+      <Field id="sl-q" label="Find a seller"><input id="sl-q" className="input full" type="search" placeholder="Name or city" value={q} onChange={(e) => setQ(e.target.value)} /></Field>
+      <p className="muted" role="status" style={{ margin: 0 }}>{shown.length} {shown.length === 1 ? 'seller' : 'sellers'}</p>
+      {shown.length ? <ul className="sellerlist">{shown.map((o) => (
+        <li key={o.id}><a className="sellercard" href={`#/business/${o.slug}`}>
+          <span><b>{o.name}</b><span className="muted">{[o.city, `${o.n} ${o.n === 1 ? 'listing' : 'listings'}`].filter(Boolean).join(' · ')}</span></span>
+          {o.verified ? <span className="badge ok"><Icon n="check" size={12} />Verified</span> : <span className="badge">Not verified</span>}
+        </a></li>))}</ul>
+        : <div className="empty"><p>No sellers match “{q}”.</p></div>}
+    </div>
+  );
+}
+
+function NotFound({ go }) {
+  const [q, setQ] = useState('');
+  return (
+    <div className="page" style={{ maxWidth: 520, margin: '0 auto' }}>
+      <div><h1>We couldn’t find that page</h1><p className="muted" style={{ margin: '4px 0 0' }}>The link may be old or mistyped. Search for what you need, or pick a place to start.</p></div>
+      <form role="search" className="row2" onSubmit={(e) => { e.preventDefault(); go(encodeQuery({ ...DEFAULT_QUERY, f: {}, q: q.trim() })); }}>
+        <input className="input full" type="search" aria-label="Search VendGrid" placeholder="Search machines, parts, locations, routes" value={q} onChange={(e) => setQ(e.target.value)} />
+        <button className="btn">Search</button>
+      </form>
+      <div className="row2" style={{ flexWrap: 'wrap' }}>
+        <a className="btn" href="#/">Browse listings</a>
+        <a className="btn secondary" href="#/about">About VendGrid</a>
+        <a className="btn secondary" href="#/support">Contact support</a>
+      </div>
+    </div>
   );
 }
 
@@ -1890,8 +1968,9 @@ function bootAddr() {
   if (typeof location === 'undefined') return (BOOT = '#/');
   const fromHash = fromAddr(location.hash);
   const fromPath = !location.hash || location.hash === '#' ? pathToRoute(location.pathname) : null;
-  BOOT = fromPath || fromHash;
-  if (fromPath) { try { history.replaceState(null, '', '/' + location.search + toAddr(fromPath)); } catch (e) { /* sandboxed */ } }
+  const unknownPath = !fromPath && (!location.hash || location.hash === '#') && !['/', '/index.html', ''].includes(location.pathname.replace(/\/+$/, '') || '/');
+  BOOT = fromPath || (unknownPath ? '#/404' : fromHash);
+  if (fromPath || unknownPath) { try { history.replaceState(null, '', '/' + location.search + toAddr(fromPath)); } catch (e) { /* sandboxed */ } }
   return BOOT;
 }
 const UNKNOWN_ORG = { id: 'unknown', name: 'Independent seller', slug: '', city: '', about: '', verified: false };
@@ -1973,8 +2052,12 @@ export default function App() {
   const setTheme = (t) => { setThemeS(t); if (t === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t); };
   useEffect(() => {
     const T = { settings: 'Settings', activity: 'Activity', browse: route.query && route.query.cat !== 'all' ? `${TYPES[route.query.cat].label} for sale & lease` : 'Vending machines, parts, locations, routes & services', post: 'Post a listing', saved: 'Saved', messages: 'Messages', mine: 'My listings', account: 'Account', billing: 'Billing', bizsettings: 'Business settings', admin: 'Admin', login: 'Sign in', legal: 'Help & policies', inquire: 'Contact seller' };
-    if (route.name !== 'listing' && route.name !== 'business') document.title = (T[route.name] || 'VendGrid') + ' · VendGrid';
-  }, [route.name, route.query && route.query.cat]);
+    if (route.name === 'info') { const t = (INFO[route.doc] || INFO.about).title; document.title = /VendGrid/.test(t) ? t : t + ' · VendGrid'; }
+    else if (route.name === 'legal' && route.doc === 'support') document.title = 'Contact support · VendGrid';
+    else if (route.name === 'sellers') document.title = 'Sellers · VendGrid';
+    else if (route.name === 'notfound') document.title = 'Page not found · VendGrid';
+    else if (route.name !== 'listing' && route.name !== 'business') document.title = (T[route.name] || 'VendGrid') + ' · VendGrid';
+  }, [route.name, route.doc, route.query && route.query.cat]);
 
   const orgs = useMemo(() => withFallbackOrg(live ? liveOrgs : { ...ORGS, dm: { ...ORGS.dm, ...dmOrg, verified: verif.status === 'verified' } }), [live, liveOrgs, verif.status, dmOrg]);
   const myOrg = live ? (profile && profile.org_id && liveOrgs[profile.org_id]) || null : orgs.dm;
@@ -2275,7 +2358,9 @@ export default function App() {
     case 'guide': view = <Guide route={route} go={go} />; break;
     case 'activity': view = <Activity go={go} />; break;
     case 'settings': view = <Settings go={go} />; break;
-    default: view = <div className="empty"><h1>We couldn’t find that page</h1><p>Check the link, or head back to the listings.</p><a className="btn" href="#/">Keep browsing</a></div>;
+    case 'info': view = <InfoPage route={route} />; break;
+    case 'sellers': view = <Sellers />; break;
+    default: view = <NotFound go={go} />;
   }
   if (mode === 'checking') view = <div className="grid" aria-busy="true" aria-label="Loading listings">{Array.from({ length: 8 }, (_, i) => <CardSkeleton key={i} />)}</div>;
   return (

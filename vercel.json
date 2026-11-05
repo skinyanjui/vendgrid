@@ -3,13 +3,39 @@
   "outputDirectory": "dist",
   "installCommand": "npm ci",
   "functions": {
-    "api/seo.js": { "includeFiles": "dist/index.html", "maxDuration": 10 }
+    "api/seo.js": {
+      "includeFiles": "dist/index.html",
+      "maxDuration": 10
+    }
   },
   "rewrites": [
-    { "source": "/listing/:slug", "destination": "/api/seo?kind=listing&slug=:slug" },
-    { "source": "/:c(vending-machines|vending-machine-parts|vending-locations|vending-routes-for-sale|vending-services|vending-wanted)", "destination": "/api/seo?kind=cat&c=:c" },
-    { "source": "/:doc(terms|privacy|refunds)", "destination": "/api/seo?kind=policy&doc=:doc" },
-    { "source": "/sitemap.xml", "destination": "/api/seo?kind=sitemap" },
-    { "source": "/robots.txt", "destination": "/api/seo?kind=robots" }
+    {
+      "source": "/listing/:slug",
+      "destination": "/api/seo?kind=listing&slug=:slug"
+    },
+    {
+      "source": "/:c(vending-machines|vending-machine-parts|vending-locations|vending-routes-for-sale|vending-services|vending-wanted)",
+      "destination": "/api/seo?kind=cat&c=:c"
+    },
+    {
+      "source": "/:doc(terms|privacy|refunds)",
+      "destination": "/api/seo?kind=policy&doc=:doc"
+    },
+    {
+      "source": "/:doc(about|seller-guide|pricing|safety)",
+      "destination": "/api/seo?kind=info&doc=:doc"
+    },
+    {
+      "source": "/:page(support|sellers)",
+      "destination": "/api/seo?kind=app&page=:page"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "/api/seo?kind=sitemap"
+    },
+    {
+      "source": "/robots.txt",
+      "destination": "/api/seo?kind=robots"
+    }
   ]
 }

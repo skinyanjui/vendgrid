@@ -7,6 +7,7 @@ import path from 'node:path';
 import { TYPES, TYPE_KEYS } from '../src/data.js';
 import { priceText } from '../src/engine.js';
 import { POLICIES, LEGAL } from '../src/legal.js';
+import { INFO, INFO_PATHS } from '../src/info.js';
 import { CAT_PATHS, CAT_SEO, listingPath, POLICY_PATHS } from '../src/seo.js';
 
 const SB = 'https://bfovgafcfetfeqykjfco.supabase.co';
@@ -140,10 +141,26 @@ function policyPage(canonOrigin, doc, html, indexable) {
   return { status: 200, html: page(html, { title: `${P.title} | VendGrid`, desc: clip(P.intro, 158), canonical: canonOrigin + POLICY_PATHS[doc], robots: indexable ? '' : 'noindex', body }) };
 }
 
+function infoPage(canonOrigin, doc, html, indexable) {
+  const P = INFO[doc];
+  const body = [`<h1>${esc(P.title)}</h1><p>${esc(P.intro)}</p>`, ...P.sections.map(([h, ps]) => `<h2>${esc(h)}</h2>${ps.map((x) => { const m = x.match(/^([A-Z][^:.]{2,40}): (.*)$/); return m ? `<p><strong>${esc(m[1])}:</strong> ${esc(m[2])}</p>` : `<p>${esc(x)}</p>`; }).join('')}`)].join('\n');
+  return { status: 200, html: page(html, { title: /VendGrid/.test(P.title) ? P.title : `${P.title} | VendGrid`, desc: clip(P.intro, 158), canonical: canonOrigin + INFO_PATHS[doc], robots: indexable ? '' : 'noindex', jsonld: [crumbs(canonOrigin, [['VendGrid', '/'], [P.title, INFO_PATHS[doc]]])], body }) };
+}
+
+// App-only screens that still get their own title, canonical link and a readable summary.
+const APP_PAGES = {
+  support: { path: '/support', title: 'Contact support | VendGrid', desc: 'Ask a question, report a problem, or request a billing, refund or data-deletion change on VendGrid.', index: true, body: '<h1>Contact support</h1><p>Ask a question, report a problem, or request a billing, refund or data-deletion change. Open this page in VendGrid to send a message.</p>' },
+  sellers: { path: '/sellers', title: 'Sellers on VendGrid', desc: 'Businesses with listings on VendGrid, with verified businesses first.', index: false, body: '<h1>Sellers</h1><p>Businesses with listings on VendGrid. Verified businesses passed our review.</p>' },
+};
+function appPage(canonOrigin, key, html, indexable) {
+  const A = APP_PAGES[key];
+  return { status: 200, html: page(html, { title: A.title, desc: A.desc, canonical: canonOrigin + A.path, robots: indexable && A.index ? '' : 'noindex', body: A.body }) };
+}
+
 async function sitemap(canonOrigin) {
   const rows = await rest('vg_listings?status=eq.published&select=id,title,updated_at&order=updated_at.desc&limit=5000');
   const urls = [
-    ['/', null], ...TYPE_KEYS.map((k) => ['/' + CAT_PATHS[k], null]), ['/terms', null], ['/privacy', null],
+    ['/', null], ...TYPE_KEYS.map((k) => ['/' + CAT_PATHS[k], null]), ['/terms', null], ['/privacy', null], ['/refunds', null], ...Object.values(INFO_PATHS).map((u) => [u, null]), ['/support', null],
     ...rows.map((r) => [listingPath(r), r.updated_at]),
   ];
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map(([u, m]) => `<url><loc>${esc(canonOrigin + u)}</loc>${m ? `<lastmod>${new Date(m).toISOString().slice(0, 10)}</lastmod>` : ''}</url>`).join('\n')}\n</urlset>\n`;
@@ -172,6 +189,8 @@ export default async function handler(req, res) {
     if (q.kind === 'listing') out = await listingPage(origin, canonOrigin, String(q.slug || ''), html, indexable);
     else if (q.kind === 'cat' && TYPES[Object.keys(CAT_PATHS).find((k) => CAT_PATHS[k] === q.c)]) out = await catPage(origin, canonOrigin, Object.keys(CAT_PATHS).find((k) => CAT_PATHS[k] === q.c), html, indexable);
     else if (q.kind === 'policy' && POLICIES[q.doc]) out = policyPage(canonOrigin, q.doc, html, indexable);
+    else if (q.kind === 'info' && INFO[q.doc]) out = infoPage(canonOrigin, q.doc, html, indexable);
+    else if (q.kind === 'app' && APP_PAGES[q.page]) out = appPage(canonOrigin, q.page, html, indexable);
     else out = { status: 404, html };
     if (out.redirect) { res.setHeader('Location', out.redirect); res.setHeader('Cache-Control', 'public, s-maxage=300'); return res.status(301).end(); }
     res.setHeader('Content-Type', 'text/html; charset=utf-8');

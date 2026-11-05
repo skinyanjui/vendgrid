@@ -21,5 +21,6 @@ export function pathToRoute(pathname) {
   if ((m = p.match(/^\/listing\/(\d+)(?:-[a-z0-9-]*)?$/))) return '#/listing/' + m[1] + '/x';
   if ((m = p.match(/^\/([a-z-]+)$/)) && PATH_CATS[m[1]]) return '#/?cat=' + PATH_CATS[m[1]];
   if ((m = p.match(/^\/(terms|privacy|refunds)$/))) return '#/legal?doc=' + m[1];
+  if ((m = p.match(/^\/(about|seller-guide|pricing|safety|support|sellers)$/))) return '#/' + m[1];
   return null;
 }

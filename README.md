@@ -65,3 +65,7 @@ public/img/ demo photos
 tests/      jsdom regression tests
 supabase/   schema migration and seed
 ```
+
+## Public information pages
+
+`src/info.js` holds the About, Seller guide, Pricing and Safety pages (same shape as `src/legal.js`). The app renders them at `#/about`, `#/seller-guide`, `#/pricing`, `#/safety`, and `api/seo.js` renders the same content at `/about`, `/seller-guide`, `/pricing` and `/safety` for search engines, with all four in the sitemap. `/support` and `/sellers` are app screens that get their own title and canonical link from the server (`/sellers` is noindex). Unknown addresses are served `dist/404.html` (a copy of the app) with a 404 status, and the app shows its not-found screen. Keep `src/info.js` true to how the product works, especially pricing and the trust rules.
