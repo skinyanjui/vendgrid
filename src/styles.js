@@ -739,4 +739,14 @@ a.u{text-decoration:underline;text-underline-offset:2px}
 .pincard.sheet .pinstrip .card{flex-basis:min(220px,64vw)}
 .mapcount{display:none}
 
+.navbtn{display:none}
+.brandrow{display:contents}
+@media(min-width:768px){
+  .brandrow{display:flex;grid-area:brand;align-items:center;gap:12px;justify-self:start}
+  .navbtn{display:inline-flex}
+  .layout.navoff{grid-template-columns:minmax(0,1fr)}
+  .layout.navoff .sidebar{display:none}
+  .layout.navoff .main{max-width:none;padding-left:16px;padding-right:16px}
+}
+
 `;

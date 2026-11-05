@@ -9,10 +9,10 @@ import { CSS } from './styles.js';
 import * as api from './backend.js';
 import L from 'leaflet';
 import LEAFLET_CSS from 'leaflet/dist/leaflet.css';
-import { Search, MapPin, Heart, Menu, X, Plus, Check, ArrowLeft, Share2, ChevronRight, ChevronLeft, Flag, SlidersHorizontal, Send, User, Package, Route as RouteIcon, Refrigerator, Wrench, ImagePlus, Trash2, Eye, Info, Building2, Sun, Moon, Monitor, Lock, EyeOff, BarChart3, Circle, Cog, BookOpen, AlertTriangle, Megaphone, Map as MapIcon, LayoutGrid, Paperclip, FileText, Clock, ExternalLink, Bell, ArrowUpDown } from 'lucide-react';
+import { PanelLeft, Search, MapPin, Heart, Menu, X, Plus, Check, ArrowLeft, Share2, ChevronRight, ChevronLeft, Flag, SlidersHorizontal, Send, User, Package, Route as RouteIcon, Refrigerator, Wrench, ImagePlus, Trash2, Eye, Info, Building2, Sun, Moon, Monitor, Lock, EyeOff, BarChart3, Circle, Cog, BookOpen, AlertTriangle, Megaphone, Map as MapIcon, LayoutGrid, Paperclip, FileText, Clock, ExternalLink, Bell, ArrowUpDown } from 'lucide-react';
 
 /* ───────────── icons (Lucide) ───────────── */
-const LI = { sort: ArrowUpDown, search: Search, pin: MapPin, heart: Heart, menu: Menu, x: X, plus: Plus, check: Check, back: ArrowLeft, share: Share2, chev: ChevronRight, left: ChevronLeft, flag: Flag, sliders: SlidersHorizontal, send: Send, user: User, box: Package, route: RouteIcon, machine: Refrigerator, wrench: Wrench, image: ImagePlus, trash: Trash2, eye: Eye, info: Info, building: Building2, sun: Sun, moon: Moon, auto: Monitor, cog: Cog, book: BookOpen, alert: AlertTriangle, megaphone: Megaphone, map: MapIcon, grid: LayoutGrid, clip: Paperclip, lock: Lock, eyeoff: EyeOff, chart: BarChart3, circle: Circle, file: FileText, clock: Clock, ext: ExternalLink, bell: Bell };
+const LI = { panel: PanelLeft, sort: ArrowUpDown, search: Search, pin: MapPin, heart: Heart, menu: Menu, x: X, plus: Plus, check: Check, back: ArrowLeft, share: Share2, chev: ChevronRight, left: ChevronLeft, flag: Flag, sliders: SlidersHorizontal, send: Send, user: User, box: Package, route: RouteIcon, machine: Refrigerator, wrench: Wrench, image: ImagePlus, trash: Trash2, eye: Eye, info: Info, building: Building2, sun: Sun, moon: Moon, auto: Monitor, cog: Cog, book: BookOpen, alert: AlertTriangle, megaphone: Megaphone, map: MapIcon, grid: LayoutGrid, clip: Paperclip, lock: Lock, eyeoff: EyeOff, chart: BarChart3, circle: Circle, file: FileText, clock: Clock, ext: ExternalLink, bell: Bell };
 const CAT_ICON = { wanted: 'megaphone', machines: 'machine', parts: 'cog', locations: 'building', routes: 'route', services: 'wrench' };
 const Icon = ({ n, size = 20, stroke = 2 }) => { const C = LI[n]; return C ? <C className={'icon i-' + n} size={size} strokeWidth={stroke} aria-hidden="true" style={{ width: size, height: size }} /> : null; };
 
@@ -230,7 +230,7 @@ function ClusterMap({ points, selected, onPick, onHover, onView, apiRef, height 
   const live = useRef({ points, selected, onPick, onHover, onView }); live.current = { points, selected, onPick, onHover, onView };
   useEffect(() => {
     if (!leafletCssIn && typeof document !== 'undefined') { const st = document.createElement('style'); st.textContent = LEAFLET_CSS; document.head.appendChild(st); leafletCssIn = true; }
-    let loaded = false, t, timer;
+    let loaded = false, t, timer, ro;
     try {
       const m = L.map(el.current, { scrollWheelZoom: false, attributionControl: true, zoomControl: true });
       m.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>');
@@ -239,10 +239,11 @@ function ClusterMap({ points, selected, onPick, onHover, onView, apiRef, height 
       if (apiRef) apiRef.current = { point: (k) => { const p = live.current.points.find((x) => x.key === k); if (!p || !map.current) return null; const c = map.current.latLngToContainerPoint([p.lat, p.lng]); const sz = map.current.getSize(); return { x: c.x, y: c.y, w: sz.x, h: sz.y }; } };
       const again = () => { clearTimeout(timer); timer = setTimeout(() => draw.current(), 60); };
       m.on('zoomend moveend', again);
+      if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(() => { try { m.invalidateSize(); again(); } catch (e) { /* map gone */ } }); ro.observe(el.current); }
       m.on('movestart', () => live.current.onHover(null, true));
       t = setTimeout(() => { if (!loaded) setState('failed'); }, 5000);
     } catch (e) { setState('failed'); }
-    return () => { clearTimeout(t); clearTimeout(timer); if (apiRef) apiRef.current = null; try { map.current && map.current.remove(); } catch (e) { /* already gone */ } map.current = null; };
+    return () => { clearTimeout(t); clearTimeout(timer); if (ro) ro.disconnect(); if (apiRef) apiRef.current = null; try { map.current && map.current.remove(); } catch (e) { /* already gone */ } map.current = null; };
   }, []);
   draw.current = () => {
     const m = map.current, g = layer.current; if (!m || !g) return;
@@ -758,7 +759,7 @@ const promoLive = (p) => p.status === 'active' || (p.status === 'canceled' && p.
 const TOP_LEVEL = ['browse', 'saved', 'messages', 'mine', 'account'];
 const PUSHED_TITLES = { info: 'VendGrid', sellers: 'Sellers', settings: 'Settings', activity: 'Activity', listing: 'Listing', inquire: 'Contact seller', post: 'New listing', business: 'Seller', billing: 'Billing', bizsettings: 'Business settings', admin: 'Admin', legal: 'Help', guide: 'Buyer’s guide', login: 'Sign in', notfound: 'Not found' };
 function Header({ route, go }) {
-  const { user, prefLoc, setPrefLoc, theme, setTheme, signOut, unread, isAdmin, noteCount } = useApp();
+  const { user, prefLoc, setPrefLoc, theme, setTheme, signOut, unread, isAdmin, noteCount, navOpen, setNavOpen } = useApp();
   const [acct, setAcct] = useState(false);
   const query = route.name === 'browse' ? route.query : null;
   const loc = query ? query.loc : prefLoc;
@@ -778,7 +779,10 @@ function Header({ route, go }) {
     <header className={'hdr' + (pushed ? ' pushed' : '')}>
       <button className="iconbtn backbtn" aria-label="Back" onClick={() => go('back')}><Icon n="back" /></button>
       <span className={'hdr-title' + (scrolled ? ' on' : '')} aria-hidden="true">{PUSHED_TITLES[route.name] || ''}</span>
-      <a className="brand" aria-label="VendGrid home" href={encodeQuery({ ...DEFAULT_QUERY, f: {}, loc: prefLoc })}><BrandMark /><span className="bname">VendGrid</span></a>
+      <div className="brandrow">
+      <button type="button" className="iconbtn navbtn" aria-label={navOpen ? 'Hide side menu' : 'Show side menu'} aria-expanded={navOpen} aria-controls="sidenav" title={navOpen ? 'Hide side menu' : 'Show side menu'} onClick={() => setNavOpen(!navOpen)}><Icon n="panel" /></button>
+        <a className="brand" aria-label="VendGrid home" href={encodeQuery({ ...DEFAULT_QUERY, f: {}, loc: prefLoc })}><BrandMark /><span className="bname">VendGrid</span></a>
+      </div>
       <SearchBox route={route} go={go} query={query} />
       <a className="iconbtn menubtn" href="#/post" aria-label="Post listing"><Icon n="plus" /></a>
       <div className="hdr-end">
@@ -807,7 +811,7 @@ function Sidebar({ route }) {
   const link = (c) => encodeQuery({ ...DEFAULT_QUERY, f: {}, cat: c || 'all', loc: route.name === 'browse' ? route.query.loc : prefLoc });
   const cur = (ok) => (ok ? 'page' : undefined);
   return (
-    <nav className="sidebar" aria-label="Primary">
+    <nav className="sidebar" id="sidenav" aria-label="Primary">
       {NAV.map(([c, label, ic]) => <a key={label} href={link(c)} aria-current={cur(cat === (c || 'all'))}><Icon n={ic} size={18} /><span className="slabel">{label}</span></a>)}
       <a href={user ? '#/saved' : '#/login?next=' + enc('#/saved')} aria-current={cur(route.name === 'saved')}><Icon n="heart" size={18} /><span className="slabel">Saved</span></a>
       <a href={user ? '#/messages' : '#/login?next=' + enc('#/messages')} aria-current={cur(route.name === 'messages')}><Icon n="send" size={18} /><span className="slabel">Messages</span>{unread > 0 && <span className="count" aria-label={`${unread} unread`}>{unread}</span>}</a>
@@ -2080,6 +2084,7 @@ export default function App() {
   const [hash, setHash] = useState(bootAddr);
   const [listings, setListings] = usePersist('listings', SEED);
   const [user, setUser] = usePersist('user', null);
+  const [navOpen, setNavOpen] = usePersist('navopen', true); // desktop: hide the side menu to give the page (the map above all) the full width
   const [favs, setFavs] = usePersist('favs', () => new Set(), (x) => [...x], (a) => new Set(a));
   const [searches, setSearches] = usePersist('searches', []);
   const [convs, setConvs] = usePersist('convs', []);
@@ -2437,7 +2442,7 @@ export default function App() {
     const h = (e) => { const el = e.target.closest && e.target.closest('a[href^="#/"]'); if (!el || e.defaultPrevented || e.metaKey || e.ctrlKey || e.button) return; e.preventDefault(); go(el.getAttribute('href')); };
     document.addEventListener('click', h); return () => document.removeEventListener('click', h);
   }, [go]);
-  const ctx = { authFail, themeSel, seeSearch, listings: allListings, priv, metrics, impr, tickets: live ? liveTickets : tickets, track, trackImpr, addTicket, isPro, isAdmin, plan, stats: liveStats, promos: promosView, changeEmail, signOutAll, exportData, deleteData, notes, noteCount, markNotesRead, verif: verifView, verifQueue, openVerifDoc, myOrg, saveOrg, room, closeTicket, reports: live ? liveReports : reports, events, invoices, audit, views, subscribe, cancelPlan, promote, cancelPromo, confirmPayment, processEvent, submitVerif, decideVerif, decideReport, bumpView, orgs, user: curUser, favs: curFavs, searches: curSearches, convs: curConvs, live, mode, sendMagicLink, drafts, prefLoc, setPrefLoc, theme, setTheme, unread, notify, requireAuth, signIn, signOut, toggleFav, saveSearch, removeSearch, searchFromText, startInquiry, sendMsg, markRead, setConvStatus, blockConv, report, setStatus, publish, setDraft };
+  const ctx = { navOpen, setNavOpen, authFail, themeSel, seeSearch, listings: allListings, priv, metrics, impr, tickets: live ? liveTickets : tickets, track, trackImpr, addTicket, isPro, isAdmin, plan, stats: liveStats, promos: promosView, changeEmail, signOutAll, exportData, deleteData, notes, noteCount, markNotesRead, verif: verifView, verifQueue, openVerifDoc, myOrg, saveOrg, room, closeTicket, reports: live ? liveReports : reports, events, invoices, audit, views, subscribe, cancelPlan, promote, cancelPromo, confirmPayment, processEvent, submitVerif, decideVerif, decideReport, bumpView, orgs, user: curUser, favs: curFavs, searches: curSearches, convs: curConvs, live, mode, sendMagicLink, drafts, prefLoc, setPrefLoc, theme, setTheme, unread, notify, requireAuth, signIn, signOut, toggleFav, saveSearch, removeSearch, searchFromText, startInquiry, sendMsg, markRead, setConvStatus, blockConv, report, setStatus, publish, setDraft };
 
   let view;
   switch (route.name) {
@@ -2469,7 +2474,7 @@ export default function App() {
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap" />
       <button className="skip" onClick={() => { const m = document.getElementById('main'); if (m) m.focus(); }}>Skip to content</button>
       <Header route={route} go={go} />
-      <div className="layout">
+      <div className={'layout' + (navOpen ? '' : ' navoff')}>
         <Sidebar route={route} />
         <main className="main" id="main" tabIndex={-1}>{view}<Footer /></main>
       </div>
