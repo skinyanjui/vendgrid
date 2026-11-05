@@ -10,6 +10,7 @@ A marketplace for the vending business: buy and sell **machines** and **parts**,
 - Listing pages with a photo gallery, approximate-area map (city only, never a street address), "Parts that fit" and "Move it" (delivery services that cover the listing's city).
 - Three-step posting with live preview; sign-in is only asked for at publish time.
 - Listing-linked messaging with photo attachments and a pay-safely notice.
+- **Settings**: change sign-in email (confirmed by link), sign out on all devices, default location, download your data as JSON, and delete your VendGrid data (files first, then every row). Sign-in resend has a 30-second cooldown and expired links explain themselves.
 - **Activity**: in-app notifications for document requests and answers, verification results and listings withdrawn after a report. Database triggers write them, so nobody can forge one.
 - A private **document room** on route listings: the seller uploads P&Ls and agreements, buyers accept confidentiality terms and request access, the seller grants or removes it, and every open is logged for the seller.
 - **Verified business** review: the business submits details and a registration document, staff approve or decline in Admin, and the badge lasts a year.
@@ -50,6 +51,7 @@ Live for admin accounts: reports, verification review and support requests. Stil
 - `supabase/migrations/20261105010000_vg_private_message_photos.sql` — private bucket for message photos.
 - `supabase/migrations/20261105020000_vg_doc_room_support.sql` — document room, support requests, document storage rules.
 - `supabase/migrations/20261105030000_vg_notifications.sql` — in-app notifications written by triggers; owner delete rules for photos.
+- `supabase/migrations/20261105040000_vg_delete_my_data.sql` — self-service data deletion used by Settings.
 - `supabase/seed.sql` — the 35 demo listings and 10 sample businesses.
 - In **Authentication → URL Configuration**, add the deployed site URL (for example `https://<your-app>.vercel.app`) to **Redirect URLs**, otherwise magic links return to the project's default Site URL.
 

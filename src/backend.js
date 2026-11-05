@@ -106,10 +106,9 @@ export async function uploadPhotos(uid, photos) {
 /** Make sure the user owns a business record to post under; create one from their email if not. */
 export async function ensureOrg(user, profile) {
   if (profile && profile.org_id) return profile.org_id;
-  const base = (user.email.split('@')[0] || 'seller').replace(/[^a-z0-9]+/gi, '-').toLowerCase().slice(0, 30) || 'seller';
+  // Never derive a public name from the email address. The seller names their business in Business settings.
   const id = 'u-' + user.id.slice(0, 8);
-  const name = base.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) + ' (seller)';
-  const ins = await client.from('vg_orgs').upsert({ id, name, slug: `${base}-${user.id.slice(0, 6)}`, city: '' }, { onConflict: 'id', ignoreDuplicates: true });
+  const ins = await client.from('vg_orgs').upsert({ id, name: 'Independent seller', slug: `seller-${user.id.slice(0, 8)}`, city: '' }, { onConflict: 'id', ignoreDuplicates: true });
   fail(ins.error);
   const up = await client.from('vg_profiles').update({ org_id: id }).eq('user_id', user.id);
   fail(up.error);
@@ -273,3 +272,49 @@ export async function loadNotes() {
   return r.data.map((n) => ({ id: n.id, kind: n.kind, title: n.title, body: n.body || '', href: n.href, at: ts(n.created_at), read: !!n.read_at }));
 }
 export async function readNotes() { const r = await client.from('vg_notifications').update({ read_at: new Date().toISOString() }).is('read_at', null); fail(r.error); }
+
+/* ── account and data ── */
+export async function changeEmail(email) {
+  const { error } = await client.auth.updateUser({ email }, { emailRedirectTo: location.origin + '/' });
+  if (error) throw error;
+}
+export async function signOutEverywhere() { const { error } = await client.auth.signOut({ scope: 'global' }); if (error) throw error; }
+
+/** Everything VendGrid holds for this person that they can read, as one JSON-ready object. */
+export async function exportMyData(user) {
+  const q = (t, f) => f(client.from(t).select('*')).then((r) => r.data || []);
+  const [profile, orgs, listings, favorites, searches, conversations, docAccess, verification, notifications, reports] = await Promise.all([
+    q('vg_profiles', (x) => x.eq('user_id', user.id)),
+    q('vg_orgs', (x) => x.eq('owner', user.id)),
+    q('vg_listings', (x) => x.eq('owner', user.id)),
+    q('vg_favorites', (x) => x.eq('user_id', user.id)),
+    q('vg_saved_searches', (x) => x.eq('user_id', user.id)),
+    client.from('vg_conversations').select('*, vg_messages(*)').then((r) => r.data || []),
+    q('vg_doc_access', (x) => x.eq('buyer', user.id)),
+    q('vg_verification', (x) => x.eq('submitted_by', user.id)),
+    q('vg_notifications', (x) => x.eq('user_id', user.id)),
+    q('vg_reports', (x) => x.eq('reporter', user.id)),
+  ]);
+  const ids = listings.map((l) => l.id);
+  const [addresses, docFiles, requestsOnMyListings] = ids.length ? await Promise.all([
+    q('vg_listing_private', (x) => x.in('listing_id', ids)),
+    q('vg_doc_files', (x) => x.in('listing_id', ids)),
+    q('vg_doc_access', (x) => x.in('listing_id', ids)),
+  ]) : [[], [], []];
+  return { exported_at: new Date().toISOString(), account: { id: user.id, email: user.email }, profile, businesses: orgs, verification, listings, private_addresses: addresses, document_room_files: docFiles, document_requests_received: requestsOnMyListings, document_requests_sent: docAccess, conversations, saved_listings: favorites, saved_searches: searches, reports_filed: reports, notifications };
+}
+
+/** Delete the person's files, then every VendGrid row about them. Their sign-in stays. */
+export async function deleteMyData(user) {
+  const mine = await client.from('vg_listings').select('id, photos').eq('owner', user.id);
+  const ids = (mine.data || []).map((l) => l.id);
+  const base = client.storage.from('vg-photos').getPublicUrl('x').data.publicUrl.replace(/x$/, '');
+  const photos = (mine.data || []).flatMap((l) => l.photos || []).filter((u) => u.startsWith(base + user.id + '/')).map((u) => u.slice(base.length));
+  const docs = ids.length ? ((await client.from('vg_doc_files').select('path').in('listing_id', ids)).data || []).map((d) => d.path) : [];
+  const ver = ((await client.from('vg_verification').select('doc_path').eq('submitted_by', user.id)).data || []).map((v) => v.doc_path).filter(Boolean);
+  const msgs = ((await client.from('vg_messages').select('images').eq('sender', user.id)).data || []).flatMap((m) => m.images || []).filter((u) => u.startsWith('vg-msg:')).map((u) => u.slice(7));
+  const rm = async (bucket, paths) => { for (let i = 0; i < paths.length; i += 100) await client.storage.from(bucket).remove(paths.slice(i, i + 100)); };
+  await rm('vg-photos', photos); await rm('vg-docs', [...docs, ...ver]); await rm('vg-msg', msgs);
+  const r = await client.rpc('vg_delete_my_data'); fail(r.error);
+  await client.auth.signOut();
+}

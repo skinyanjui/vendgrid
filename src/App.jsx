@@ -64,6 +64,7 @@ export function parseHash(h) {
     case 'account': case 'menu': return { name: 'account' };
     case 'guide': return { name: 'guide', topic: sp.get('t') || 'machines' };
     case 'activity': return { name: 'activity' };
+    case 'settings': return { name: 'settings' };
     default: return { name: 'notfound' };
   }
 }
@@ -97,7 +98,7 @@ export function fromAddr(a) {
   if ((m = s.match(/^s-([0-9a-f]+)$/))) return '#/?' + fromHex(m[1]);
   if (s === 'menu') return '#/account';
   if (s === 'my-listings') return '#/my-listings';
-  if (['post', 'saved', 'messages', 'login', 'account', 'billing', 'admin', 'legal', 'guide', 'activity'].includes(s)) return '#/' + s;
+  if (['post', 'saved', 'messages', 'login', 'account', 'billing', 'admin', 'legal', 'guide', 'activity', 'settings'].includes(s)) return '#/' + s;
   return '#/';
 }
 
@@ -660,7 +661,7 @@ const NAV = [
   ['', 'Explore', 'search'], ['machines', 'Machines', 'machine'], ['parts', 'Parts', 'cog'], ['locations', 'Locations', 'building'], ['routes', 'Routes', 'route'], ['services', 'Services', 'wrench'], ['wanted', 'Wanted', 'megaphone'],
 ];
 const TOP_LEVEL = ['browse', 'saved', 'messages', 'mine', 'account'];
-const PUSHED_TITLES = { activity: 'Activity', listing: 'Listing', inquire: 'Contact seller', post: 'New listing', business: 'Seller', billing: 'Billing', bizsettings: 'Business settings', admin: 'Admin', legal: 'Help', guide: 'Buyer’s guide', login: 'Sign in', notfound: 'Not found' };
+const PUSHED_TITLES = { settings: 'Settings', activity: 'Activity', listing: 'Listing', inquire: 'Contact seller', post: 'New listing', business: 'Seller', billing: 'Billing', bizsettings: 'Business settings', admin: 'Admin', legal: 'Help', guide: 'Buyer’s guide', login: 'Sign in', notfound: 'Not found' };
 function Header({ route, go }) {
   const { user, prefLoc, setPrefLoc, theme, setTheme, signOut, unread, isAdmin, noteCount } = useApp();
   const [acct, setAcct] = useState(false);
@@ -693,7 +694,7 @@ function Header({ route, go }) {
           <div className="pop" style={{ width: 240 }}>
             {user ? <div><b>{user.name}</b><div className="muted" style={{ fontSize: 12 }}>{user.email}</div></div> : <div className="muted">Browsing as guest</div>}
             <div className="opts">
-              {user && <><button role="menuitem" onClick={() => { setAcct(false); go('#/billing'); }}>Billing</button><button role="menuitem" onClick={() => { setAcct(false); go('#/business-settings'); }}>Business settings</button>{isAdmin && <button role="menuitem" onClick={() => { setAcct(false); go('#/admin'); }}>Admin</button>}</>}
+              {user && <><button role="menuitem" onClick={() => { setAcct(false); go('#/settings'); }}>Settings</button><button role="menuitem" onClick={() => { setAcct(false); go('#/billing'); }}>Billing</button><button role="menuitem" onClick={() => { setAcct(false); go('#/business-settings'); }}>Business settings</button>{isAdmin && <button role="menuitem" onClick={() => { setAcct(false); go('#/admin'); }}>Admin</button>}</>}
               {user ? <button role="menuitem" onClick={() => { signOut(); setAcct(false); go('#/'); }}>Sign out</button> : <button role="menuitem" onClick={() => { setAcct(false); go('#/login'); }}>Sign in</button>}
               <button role="menuitemcheckbox" aria-checked={theme === 'dark'} className="menuswitch" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}><Icon n="moon" size={16} />Dark mode<span className="switch" aria-hidden="true"><i /></span></button>
             </div>
@@ -751,6 +752,87 @@ function ResetDemo() {
     </>
   );
 }
+function Settings({ go }) {
+  const { user, live, requireAuth, themeSel, setTheme, prefLoc, setPrefLoc, changeEmail, signOutAll, exportData, deleteData, notify } = useApp();
+  const [em, setEm] = useState(''), [emOpen, setEmOpen] = useState(false), [emMsg, setEmMsg] = useState(null);
+  const [loc, setLoc] = useState(prefLoc || '');
+  const [del, setDel] = useState(false), [word, setWord] = useState('');
+  const [busy, setBusy] = useState(''), [err, setErr] = useState({});
+  useEffect(() => { if (!user) requireAuth({ type: 'go', href: '#/settings' }, go, true); }, [user]);
+  useEffect(() => setLoc(prefLoc || ''), [prefLoc]);
+  if (!user) return null;
+  const run = async (k, fn) => { setBusy(k); setErr((e) => ({ ...e, [k]: '' })); try { await fn(); } catch (x) { setErr((e) => ({ ...e, [k]: String((x && x.message) || x).replace(/^.*?: /, '') })); } setBusy(''); };
+  const locOk = !loc.trim() || !!resolveLocation(loc);
+  return (
+    <div className="page settings">
+      <h1>Settings</h1>
+
+      <section className="stack" aria-labelledby="st-in">
+        <h2 id="st-in" className="sech">Sign-in</h2>
+        <div className="list">
+          <div className="item static"><span className="t"><b>Email</b><span className="muted" style={{ overflowWrap: 'anywhere' }}>{user.email}</span></span>{!emOpen && <button className="btn secondary sm" onClick={() => { setEmOpen(true); setEmMsg(null); }}>Change</button>}</div>
+          {emOpen && (
+            <form className="item static stack" style={{ alignItems: 'stretch' }} noValidate onSubmit={(e) => { e.preventDefault(); const v = em.trim(); if (!/^\S+@\S+\.\S+$/.test(v)) { setErr((x) => ({ ...x, em: 'That email doesn’t look right. Try name@example.com.' })); return; } if (v.toLowerCase() === user.email.toLowerCase()) { setErr((x) => ({ ...x, em: 'That’s already your email.' })); return; } run('em', async () => { await changeEmail(v); setEmMsg(v); setEm(''); setEmOpen(false); }); }}>
+              <Field id="st-em" label="New email" error={err.em}><input id="st-em" className={'input full' + (err.em ? ' bad' : '')} type="email" autoComplete="email" value={em} onChange={(e) => { setEm(e.target.value); setErr((x) => ({ ...x, em: '' })); }} /></Field>
+              <div className="row2"><button className="btn sm" disabled={busy === 'em'}>{busy === 'em' ? 'Sending…' : live ? 'Send confirmation' : 'Change email'}</button><button type="button" className="btn ghost sm" onClick={() => { setEmOpen(false); setErr((x) => ({ ...x, em: '' })); }}>Cancel</button></div>
+            </form>
+          )}
+        </div>
+        {emMsg && <div className="banner" role="status">{live ? <>Check <b>{emMsg}</b> for a confirmation link. Your email changes after you confirm. Until then, keep signing in with {user.email}.</> : <>Email changed to <b>{emMsg}</b>.</>}</div>}
+        <p className="muted iconline" style={{ margin: 0, fontSize: 13 }}><Icon n="lock" size={14} />No password. Each sign-in uses a one-time link sent to this email.</p>
+        <div className="list">
+          <button className="item" disabled={busy === 'out'} onClick={() => run('out', async () => { await signOutAll(); go('#/', true); })}><span className="t"><b>Sign out on all devices</b><span className="muted">Ends every session, including this one</span></span></button>
+        </div>
+        {err.out && <div className="err" role="alert">{err.out}</div>}
+      </section>
+
+      <section className="stack" aria-labelledby="st-ap">
+        <h2 id="st-ap" className="sech">Preferences</h2>
+        <div className="list">
+          <div className="item static pref"><span className="t"><b>Appearance</b></span><Seg label="Appearance" options={[['light', 'Light', 'sun'], ['dark', 'Dark', 'moon'], ['system', 'Auto', 'auto']]} value={themeSel} onChange={setTheme} /></div>
+          <form className="item static stack" style={{ alignItems: 'stretch' }} noValidate onSubmit={(e) => { e.preventDefault(); if (!locOk) return; const r = loc.trim() ? resolveLocation(loc) : null; const v = r ? `${r.city}, ${r.st}` : ''; setPrefLoc(v); setLoc(v); notify(v ? `Searches start near ${v}` : 'Searches start everywhere'); }}>
+            <Field id="st-loc" label="Default location" hint="Where searches start. Leave empty to search everywhere." error={locOk ? '' : 'We don’t know that place yet. Try a city and state, like Evansville, IN.'}>
+              <input id="st-loc" className={'input full' + (locOk ? '' : ' bad')} list="st-cities" autoComplete="address-level2" value={loc} placeholder="City, state or ZIP" onChange={(e) => setLoc(e.target.value)} />
+            </Field>
+            <datalist id="st-cities">{CITIES.map((c) => <option key={c.city + c.st} value={`${c.city}, ${c.st}`} />)}</datalist>
+            <button className="btn secondary sm" style={{ alignSelf: 'flex-start' }} disabled={loc === (prefLoc || '') || !locOk}>Save location</button>
+          </form>
+        </div>
+      </section>
+
+      <section className="stack" aria-labelledby="st-data">
+        <h2 id="st-data" className="sech">Your data</h2>
+        <div className="list">
+          <button className="item" disabled={busy === 'ex'} onClick={() => run('ex', async () => {
+            const data = await exportData();
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `vendgrid-data-${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); notify('Download started');
+          })}><span className="t"><b>{busy === 'ex' ? 'Preparing…' : 'Download your data'}</b><span className="muted">Listings, business profile, messages, saved items and requests, as a JSON file</span></span></button>
+        </div>
+        {err.ex && <div className="err" role="alert">{err.ex}</div>}
+        {!del ? (
+          <div className="list"><button className="item danger" onClick={() => setDel(true)}><span className="t"><b>Delete your VendGrid data</b><span className="muted">Permanently, right away</span></span></button></div>
+        ) : (
+          <form className="panel dangerzone" noValidate onSubmit={(e) => { e.preventDefault(); if (word.trim().toUpperCase() !== 'DELETE') return; run('del', async () => { await deleteData(); go('#/', true); notify('Your VendGrid data was deleted'); }); }}>
+            <h3 style={{ margin: 0 }}>This permanently deletes:</h3>
+            <ul>
+              <li>Every listing you posted, with its photos and document room</li>
+              <li>Your business profile and verification</li>
+              <li>Conversations you started, and your messages and photos in others</li>
+              <li>Saved listings, saved searches, reports you filed and your Activity</li>
+            </ul>
+            <p className="muted" style={{ margin: 0 }}>{live ? 'Download a copy first if you want one. Your sign-in email is kept so you can come back; to remove it too, use Contact support.' : 'In this demo, this clears everything stored in this browser.'}</p>
+            <Field id="st-del" label="Type DELETE to confirm"><input id="st-del" className="input full" autoComplete="off" autoCapitalize="characters" value={word} onChange={(e) => setWord(e.target.value)} /></Field>
+            {err.del && <div className="err" role="alert">{err.del}</div>}
+            <div className="row2"><button className="btn dangerbtn" disabled={word.trim().toUpperCase() !== 'DELETE' || busy === 'del'}>{busy === 'del' ? 'Deleting…' : 'Delete my data'}</button><button type="button" className="btn ghost" onClick={() => { setDel(false); setWord(''); }}>Cancel</button></div>
+          </form>
+        )}
+      </section>
+    </div>
+  );
+}
+
 function Account({ go }) {
   const { live } = useApp();
   const { user, signOut, theme, themeSel, setTheme, isAdmin, noteCount } = useApp();
@@ -771,9 +853,9 @@ function Account({ go }) {
       </div>
       <h2 className="sech">Preferences</h2>
       <div className="list">
-        <div className="item static pref"><span className="t"><b>Appearance</b></span><Seg label="Appearance" options={[['light', 'Light', 'sun'], ['dark', 'Dark', 'moon'], ['system', 'Auto', 'auto']]} value={themeSel} onChange={setTheme} /></div>
+        {user ? <Row to="#/settings" title="Settings" sub="Email, sign-out, appearance, location, your data" /> : <div className="item static pref"><span className="t"><b>Appearance</b></span><Seg label="Appearance" options={[['light', 'Light', 'sun'], ['dark', 'Dark', 'moon'], ['system', 'Auto', 'auto']]} value={themeSel} onChange={setTheme} /></div>}
       </div>
-      {!live && <ResetDemo />}
+      {!live && !user && <ResetDemo />}
       <h2 className="sech">Help</h2>
       <div className="list">
         <Row to="#/guide" title="Buyer’s guide" sub="Prices, what to check, buying safely" /><Row to="#/legal?doc=terms" title="Terms" /><Row to="#/legal?doc=privacy" title="Privacy" /><Row to="#/legal?doc=refunds" title="Refunds" /><Row to="#/legal?doc=support" title="Contact support" />
@@ -1743,6 +1825,10 @@ function Login({ route, go }) {
   const [err, setErr] = useState('');
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [wait, setWait] = useState(0);
+  useEffect(() => { if (wait <= 0) return; const t = setTimeout(() => setWait(wait - 1), 1000); return () => clearTimeout(t); }, [wait]);
+  const linkErr = useMemo(() => { try { const h = new URLSearchParams((location.hash || '').replace(/^#\/?/, '').replace(/^[^&=]*(?=&)/, '')); const q = new URLSearchParams(location.search); return h.get('error_description') || q.get('error_description') || ''; } catch (e) { return ''; } }, []);
+  const send = async () => { setBusy(true); setErr(''); try { await sendMagicLink(email.trim()); setSent(true); setWait(30); } catch (x) { setErr(/rate|seconds|too many/i.test(x.message) ? 'Too many links requested. Wait a minute and try again.' : 'We couldn’t send the link. Try again in a moment.'); } setBusy(false); };
   if (live) {
     if (user) return <div className="page" style={{ maxWidth: 420, margin: '0 auto' }}><h1>You’re signed in</h1><p className="muted" style={{ margin: 0 }}>{user.email}</p><a className="btn" href={route.next || '#/'}>Continue</a></div>;
     if (sent) return (
@@ -1750,13 +1836,19 @@ function Login({ route, go }) {
         <span className="caticon" style={{ background: 'var(--gray-100)' }}><Icon n="send" size={24} /></span>
         <h1>Check your email</h1>
         <p style={{ margin: 0 }}>We sent a sign-in link to <b>{email}</b>. Open it on this device to finish signing in.</p>
-        <button className="btn secondary" onClick={() => setSent(false)}>Use a different email</button>
+        <p className="muted" style={{ margin: 0 }}>It can take a minute. Check your spam folder too. The link works once and expires in an hour.</p>
+        <div className="row2" style={{ flexWrap: 'wrap' }}>
+          <button className="btn secondary" disabled={wait > 0 || busy} onClick={send}>{busy ? 'Sending…' : wait > 0 ? `Send again in ${wait}s` : 'Send again'}</button>
+          <button className="btn ghost" onClick={() => { setSent(false); setErr(''); }}>Use a different email</button>
+        </div>
+        {err && <div className="err" role="alert">{err}</div>}
       </div>
     );
     return (
-      <form className="page" style={{ maxWidth: 420, margin: '0 auto' }} noValidate onSubmit={async (e) => { e.preventDefault(); if (!/^\S+@\S+\.\S+$/.test(email)) { setErr('That email doesn’t look right. Try name@example.com.'); return; } setBusy(true); try { await sendMagicLink(email.trim()); setSent(true); } catch (x) { setErr(/rate|seconds/i.test(x.message) ? 'Too many links requested. Wait a minute and try again.' : 'We couldn’t send the link. Try again in a moment.'); } setBusy(false); }}>
+      <form className="page" style={{ maxWidth: 420, margin: '0 auto' }} noValidate onSubmit={(e) => { e.preventDefault(); if (!/^\S+@\S+\.\S+$/.test(email)) { setErr('That email doesn’t look right. Try name@example.com.'); return; } send(); }}>
         <div><h1>Welcome to VendGrid</h1><p className="muted" style={{ margin: '4px 0 0' }}>Browse freely. Sign in when you’re ready to save, message or post.</p></div>
-        <Field id="em" label="Email" error={err}><input id="em" className={'input full' + (err ? ' bad' : '')} type="email" autoComplete="email" value={email} onChange={(e) => { setEmail(e.target.value); setErr(''); }} /></Field>
+        {linkErr && !err && <div className="alert" role="alert"><span>{/expired|invalid/i.test(linkErr) ? 'That sign-in link expired or was already used. Enter your email for a new one.' : linkErr.replace(/\+/g, ' ')}</span></div>}
+        <Field id="em" label="Email" error={err}><input id="em" className={'input full' + (err ? ' bad' : '')} type="email" autoComplete="email" inputMode="email" autoFocus value={email} onChange={(e) => { setEmail(e.target.value); setErr(''); }} /></Field>
         <button className="btn block" disabled={busy}>{busy ? 'Sending…' : 'Email me a sign-in link'}</button>
         <p className="muted iconline" style={{ fontSize: 12 }}><Icon n="lock" size={14} />No password needed. The link signs you in on this device.</p>
       </form>
@@ -1858,7 +1950,7 @@ export default function App() {
   useEffect(() => { if (themeSel !== 'system') document.documentElement.setAttribute('data-theme', themeSel); }, []);
   const setTheme = (t) => { setThemeS(t); if (t === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t); };
   useEffect(() => {
-    const T = { activity: 'Activity', browse: route.query && route.query.cat !== 'all' ? `${TYPES[route.query.cat].label} for sale & lease` : 'Vending machines, parts, locations, routes & services', post: 'Post a listing', saved: 'Saved', messages: 'Messages', mine: 'My listings', account: 'Account', billing: 'Billing', bizsettings: 'Business settings', admin: 'Admin', login: 'Sign in', legal: 'Help & policies', inquire: 'Contact seller' };
+    const T = { settings: 'Settings', activity: 'Activity', browse: route.query && route.query.cat !== 'all' ? `${TYPES[route.query.cat].label} for sale & lease` : 'Vending machines, parts, locations, routes & services', post: 'Post a listing', saved: 'Saved', messages: 'Messages', mine: 'My listings', account: 'Account', billing: 'Billing', bizsettings: 'Business settings', admin: 'Admin', login: 'Sign in', legal: 'Help & policies', inquire: 'Contact seller' };
     if (route.name !== 'listing' && route.name !== 'business') document.title = (T[route.name] || 'VendGrid') + ' · VendGrid';
   }, [route.name, route.query && route.query.cat]);
 
@@ -1935,6 +2027,16 @@ export default function App() {
     const p = pending.current; pending.current = null;
     if (p && p.type !== 'go') { if (p.type === 'save') setFavs((f) => new Set(f).add(p.id)); if (p.type === 'saveSearch') saveSearch(p.query, true); return p.type === 'saveSearch' ? encodeQuery(p.query) : null; }
     return p && p.type === 'go' ? p.href : null;
+  };
+  const changeEmail = async (email) => { if (live) { await api.changeEmail(email); return; } setUser((u) => ({ ...u, email, name: email.split('@')[0] })); };
+  const signOutAll = async () => { if (live) { await api.signOutEverywhere(); return; } setUser(null); setFavs(new Set()); setConvs([]); setSearches([]); };
+  const exportData = async () => {
+    if (live) return api.exportMyData(liveUser);
+    return { exported_at: new Date().toISOString(), account: user, listings: listings.filter((l) => l.mine), saved_listings: [...favs], saved_searches: searches, conversations: convs, document_room: rooms, notifications: demoNotes };
+  };
+  const deleteData = async () => {
+    if (live) { await api.deleteMyData(liveUser); setLiveUser(null); setLiveFavs(new Set()); setLiveSearches([]); setLiveConvs([]); setProfile(null); setLiveVerif(null); setLiveNotes([]); await refreshCatalog(null).catch(() => {}); return; }
+    store.clear(); location.hash = ''; location.reload();
   };
   const signOut = () => { if (live) { api.sb().auth.signOut(); return; } setUser(null); setFavs(new Set()); setConvs([]); setSearches([]); };
   const toggleFav = (id) => {
@@ -2116,7 +2218,7 @@ export default function App() {
     const h = (e) => { const el = e.target.closest && e.target.closest('a[href^="#/"]'); if (!el || e.defaultPrevented || e.metaKey || e.ctrlKey || e.button) return; e.preventDefault(); go(el.getAttribute('href')); };
     document.addEventListener('click', h); return () => document.removeEventListener('click', h);
   }, [go]);
-  const ctx = { themeSel, seeSearch, listings: allListings, priv, metrics, impr, tickets: live ? liveTickets : tickets, track, trackImpr, addTicket, isPro, isAdmin, plan, promos: promosView, notes, noteCount, markNotesRead, verif: verifView, verifQueue, openVerifDoc, myOrg, saveOrg, room, closeTicket, reports: live ? liveReports : reports, events, invoices, audit, views, subscribe, cancelPlan, promote, cancelPromo, confirmPayment, processEvent, submitVerif, decideVerif, decideReport, bumpView, orgs, user: curUser, favs: curFavs, searches: curSearches, convs: curConvs, live, mode, sendMagicLink, drafts, prefLoc, setPrefLoc, theme, setTheme, unread, notify, requireAuth, signIn, signOut, toggleFav, saveSearch, removeSearch, searchFromText, startInquiry, sendMsg, markRead, setConvStatus, blockConv, report, setStatus, publish, setDraft };
+  const ctx = { themeSel, seeSearch, listings: allListings, priv, metrics, impr, tickets: live ? liveTickets : tickets, track, trackImpr, addTicket, isPro, isAdmin, plan, promos: promosView, changeEmail, signOutAll, exportData, deleteData, notes, noteCount, markNotesRead, verif: verifView, verifQueue, openVerifDoc, myOrg, saveOrg, room, closeTicket, reports: live ? liveReports : reports, events, invoices, audit, views, subscribe, cancelPlan, promote, cancelPromo, confirmPayment, processEvent, submitVerif, decideVerif, decideReport, bumpView, orgs, user: curUser, favs: curFavs, searches: curSearches, convs: curConvs, live, mode, sendMagicLink, drafts, prefLoc, setPrefLoc, theme, setTheme, unread, notify, requireAuth, signIn, signOut, toggleFav, saveSearch, removeSearch, searchFromText, startInquiry, sendMsg, markRead, setConvStatus, blockConv, report, setStatus, publish, setDraft };
 
   let view;
   switch (route.name) {
@@ -2136,6 +2238,7 @@ export default function App() {
     case 'account': view = <Account go={go} />; break;
     case 'guide': view = <Guide route={route} go={go} />; break;
     case 'activity': view = <Activity go={go} />; break;
+    case 'settings': view = <Settings go={go} />; break;
     default: view = <div className="empty"><h1>We couldn’t find that page</h1><p>Check the link, or head back to the listings.</p><a className="btn" href="#/">Keep browsing</a></div>;
   }
   if (mode === 'checking') view = <div className="grid" aria-busy="true" aria-label="Loading listings">{Array.from({ length: 8 }, (_, i) => <CardSkeleton key={i} />)}</div>;

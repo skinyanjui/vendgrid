@@ -57,7 +57,7 @@ export const POLICIES = {
       ]],
       ['Reports and removal', [
         'Anyone can report a listing. We may review, edit for formatting, hide or remove content, limit features, or suspend or close an account that breaks these terms, puts others at risk, or creates legal exposure. Where it is safe and lawful, we’ll tell you why.',
-        'You can stop using VendGrid at any time and ask us to delete your account through Contact support.',
+        'You can stop using VendGrid at any time. In Settings you can delete your VendGrid data yourself, or ask us through Contact support to remove your sign-in email as well.',
       ]],
       ['Deals and disputes between members', [
         'Inspect equipment, confirm the location and contract terms, and check any figures before you pay. Problems with a deal are between the buyer and the seller. We may help by reviewing reports, but we don’t have to and we can’t reverse payments.',
@@ -116,11 +116,11 @@ export const POLICIES = {
       ]],
       ['How long we keep it', [
         'We keep your account and content while your account is open. Sold, filled and withdrawn listings stay in your account history until you close your account.',
-        'When you ask us to delete your account, we delete or de-identify your profile, listings, photos, documents and messages you sent within 30 days. We may keep limited records longer when needed for fraud prevention, a report under review, or a legal obligation. Your messages may remain visible to the other person in a conversation as part of their record.',
+        'When you delete your data in Settings, your profile, listings, photos, documents and messages are removed right away. Backups can take up to 30 days to age out. We may keep limited records longer when needed for fraud prevention, a report under review, or a legal obligation. Conversations on someone else’s listing that you didn’t start are removed with your messages, but the other person keeps what they sent.',
       ]],
       ['Your choices and rights', [
-        'You can edit or withdraw your listings and edit your business profile at any time, and remove saved items and searches yourself.',
-        `To get a copy of your information, correct it, or delete your account, use ${L.contact} and choose “Delete my data” or “Question”. We’ll confirm the request comes from your account’s email and reply within 45 days. Depending on where you live, you may have further rights under local law, and we won’t treat you differently for using them.`,
+        'You can edit or withdraw your listings and edit your business profile at any time, and remove saved items and searches yourself. In Settings you can change your sign-in email, sign out on all devices, set your default location, download your data as a file and delete your VendGrid data.',
+        `Download your data or delete it yourself in Settings. Deleting removes your listings, photos, documents, business profile, verification, conversations you started, your messages, saved items and activity right away. Your sign-in email is kept so you can come back; to remove it too, or for anything Settings doesn’t cover, use ${L.contact} and choose “Delete my data” or “Question”. We’ll confirm the request comes from your account’s email and reply within 45 days. Depending on where you live, you may have further rights under local law, and we won’t treat you differently for using them.`,
       ]],
       ['Security', [
         'Access is enforced by the database for every request: you can only read private rows you are entitled to. Verification documents, route documents and message photos are kept in private storage and are shown only through short-lived signed links. No system is perfectly secure, so please use a secure email account and report anything suspicious.',

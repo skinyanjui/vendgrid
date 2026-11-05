@@ -636,4 +636,14 @@ label.btn.disabled{opacity:.6;pointer-events:none}
 .note .when{font-size:12px}
 .ndot{width:8px;height:8px;border-radius:50%;background:var(--blue);flex:none;margin-top:8px}
 
+/* settings */
+.settings{gap:28px}
+.settings .item.danger .t b{color:var(--red)}
+.settings .item:disabled{opacity:.6}
+.settings .item .t .muted{white-space:normal}
+.dangerzone{border-color:var(--red);gap:12px}
+.dangerzone ul{margin:0;padding-left:20px;font-size:14px;line-height:22px}
+.dangerbtn{background:var(--red);color:#fff;border-color:var(--red)}
+.dangerbtn:disabled{opacity:.45}
+
 `;
